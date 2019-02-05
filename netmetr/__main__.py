@@ -24,6 +24,7 @@ FALLBACK_MAX_HISTORY_LOGS = 10
 FALLBACK_CLIENT_TYPE = "HW-PROBE"
 DEBUG = None
 COLORED_OUTPUT = None
+USE_TLS = True
 
 
 class Netmetr:
@@ -68,7 +69,8 @@ class Netmetr:
 
     def send_request(self, req_json, uri):
         req = request.Request(
-            "https://{}/RMBTControlServer/{}".format(
+            "{}://{}/RMBTControlServer/{}".format(
+                "https" if USE_TLS else "http",
                 self.control_server,
                 uri
             )
@@ -746,6 +748,15 @@ def prepare_parser():
         help='set export of LTE, GPS and other measurement results to a CSV'
         ' file. If the file already exists the output will be appended.'
     )
+    parser.add_argument(
+        '--fallback-control-server-url', type=str, nargs=1, default=['control.netmetr.cz'],
+        help='Set fallback control server to run test against in case it is not'
+        ' configured in UCI'
+    )
+    parser.add_argument(
+        '--unsecure-connection', action='store_true', help='use HTTP instead of HTTPS'
+        ' when communicating with control server API'
+    )
 
     return parser
 
@@ -763,9 +774,13 @@ def main():
 
     global DEBUG
     global COLORED_OUTPUT
+    global FALLBACK_CTRL_SRV
+    global USE_TLS
 
     DEBUG = args.debug
     COLORED_OUTPUT = not args.no_color
+    FALLBACK_CTRL_SRV = args.fallback_control_server_url[0]
+    USE_TLS = not args.unsecure_connection
 
     if args.autostart:
         if uci_get("autostart_enabled") != '1':
