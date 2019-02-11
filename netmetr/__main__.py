@@ -856,3 +856,7 @@ def main():
     netmetr.load_sync_code()
     if (netmetr.sync_code):
         print_info("Your Sync code is: " + netmetr.sync_code)
+
+
+if __name__ == "__main__":
+    main()
