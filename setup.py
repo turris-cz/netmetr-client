@@ -25,7 +25,7 @@ DESCRIPTION = "Netmetr client (basically a wrapper around RMBT binary)"
 
 setup(
     name='netmetr',
-    version="1.4",
+    version="1.4.1",
     author='CZ.NIC, z.s.p.o. (http://www.nic.cz/)',
     author_email='martin.prudek@nic.cz',
     packages=[
