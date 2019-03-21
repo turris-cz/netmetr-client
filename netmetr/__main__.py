@@ -25,11 +25,17 @@ FALLBACK_CLIENT_TYPE = "HW-PROBE"
 DEBUG = None
 COLORED_OUTPUT = None
 USE_TLS = True
+DEFAULT_LANG = "en_US"
+
+
+def get_default_language():
+    lang = locale.getdefaultlocale()[0]
+    return (lang if lang else DEFAULT_LANG)
 
 
 class Netmetr:
     def __init__(self):
-        self.language = locale.getdefaultlocale()[0]
+        self.language = get_default_language()
         self.timezone = subprocess.check_output([
             "date",
             "+%Z"
