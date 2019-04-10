@@ -12,6 +12,7 @@ import tempfile
 import ssl
 import serial
 import csv
+import math
 
 from urllib import request
 
@@ -319,10 +320,10 @@ class Netmetr:
             req_json["geoLocations"] = [{
                 "geo_lat": self.lat,
                 "geo_long": self.lon,
-                "accuracy": 5*float(self.hdop),
+                "accuracy": self.hepe,
                 "altitude": self.altitude,
                 "bearing": self.bearing,
-                "speed": self.speed,
+                "speed": self.velocity,
                 "tstamp": self.get_time(),
                 "provider": "gps"
             }]
@@ -408,6 +409,21 @@ class Netmetr:
         self.download_sync_code()
 
     def measure_gps(self):
+        """ Measure GPS based on at command "at!gpsloc?"
+        Example output:
+
+            Lat: 49 Deg 44 Min 57.00 Sec N  (0x008D823D)
+            Lon: 13 Deg 22 Min 48.54 Sec E  (0x00260F21)
+            Time: 2018 11 21 2 10:10:02 (GPS)
+            LocUncAngle: 0.0 deg  LocUncA: 192 m  LocUncP: 13 m  HEPE: 192.439 m
+            3D Fix
+            Altitude: 332 m  LocUncVe: 64.0 m
+            Heading: 0.0 deg  VelHoriz: 0.0 m/s  VelVert: 0.0 m/s
+
+            OK
+
+        We are going to parse it line by line in this very order
+        """
         if not self.gps_console_path:
             return
         if not os.path.exists(self.gps_console_path):
@@ -417,75 +433,70 @@ class Netmetr:
 
         print_progress("Starting GPS measurement.")
         try:
-            with serial.Serial(self.gps_console_path, timeout=5) as ser:
-                self.parse_gps_console(ser)
-        except:
+            with serial.Serial(self.gps_console_path, timeout=5) as console:
+                console.write(b"AT!GPSLOC?\r")
+
+                console.readline()  # AT command echo
+                line = console.readline().decode("utf-8")  # Latitude
+                line_split = line.split(":")
+                if line_split[0] == "Lat":
+                    line_split = line_split[1].split()
+                    lat = (float(line_split[0]) +
+                           float(line_split[2]) / 60 +
+                           float(line_split[4]) / 3600)
+                    if line_split[6] == "S":
+                        lat = -lat
+                    self.lat = lat
+                else:
+                    raise Exception("Latitude measurement failed")
+
+                line = console.readline().decode("utf-8")  # Longitude
+                line_split = line.split(":")
+                if line_split[0] == "Lon":
+                    line_split = line_split[1].split()
+                    lon = (float(line_split[0]) +
+                           float(line_split[2]) / 60 +
+                           float(line_split[4]) / 3600)
+                    if line_split[6] == "W":
+                        lon = -lon
+                    self.lon = lon
+                else:
+                    raise Exception("Longitude measurement failed")
+
+                console.readline()  # Time
+                line = console.readline().decode("utf-8")  # HEPE (Accuracy)
+                line_split = line.split(":")
+                if line_split[0] == "LocUncAngle":
+                    line_split = line_split[4].split()
+                    self.hepe = float(line_split[0])
+                else:
+                    raise Exception("HEPE measurement failed")
+
+                console.readline()  # 3DFix
+                line = console.readline().decode("utf-8")  # Altitude
+                line_split = line.split(":")
+                if line_split[0] == "Altitude":
+                    line_split = line_split[1].split()
+                    self.altitude = float(line_split[0])
+                else:
+                    raise Exception("Altitude measurement failed")
+
+                line = console.readline().decode("utf-8")  # Heading
+                line_split = line.split(":")
+                if line_split[0] == "Heading":
+                    split_h = line_split[1].split()
+                    self.bearing = float(split_h[0])
+                    # vertical and horizontal velocity measured in m/s
+                    split_vh = line_split[2].split()
+                    vh = float(split_vh[0])
+                    split_vv = line_split[3].split()
+                    vv = float(split_vv[0])
+                    self.velocity = math.sqrt(vv**2 + vh**2)
+                else:
+                    raise Exception("Heading / velocity measurement failed")
+        except Exception:
             print_error("GPS problem.")
             self.gps_console_path = None
-
-    def parse_gps_console(self, console):
-        GGA = False
-        VTG = False
-        for i in range(1, 100 + 1):
-            line = console.readline()
-            if len(line) > 0 and line[0] == "$":
-                splitted = line.split(",")
-                if splitted[0] == "$GPGGA" and not GGA:
-                    GGA = self.parse_gps_GGA(splitted, i)
-                elif splitted[0] == "$GPVTG" and not VTG:
-                    VTG = self.parse_gps_VTG(splitted, i)
-                if GGA and VTG:
-                    print_debug("GPS measured (line {}). Closing console.".format(i))
-                    break
-        if not GGA or not VTG:
-            self.gps_console_path = None
-            print_error("GPS problem: no valid data. Console closed.")
-
-    def parse_gps_GGA(self, text, i):
-        lat = text[2]
-        if lat == '':
-            if print_debug("Empty latitude (line {})".format(i)):
-                print(text)
-            return False
-        lon = text[4]
-        if lon == '':
-            if print_debug("Empty longitude (line {})".format(i)):
-                print(text)
-            return False
-        if text[8] == '':
-            if print_debug("Empty hdop (line {})".format(i)):
-                print(text)
-            return False
-        else:
-            self.hdop = text[8]
-        if text[9] == '':
-            if print_debug("Empty altitude (line {})".format(i)):
-                print(text)
-            return False
-        else:
-            self.altitude = text[9]
-        self.lat = int(lat[0:2])+float(lat[2:])/60
-        self.lon = int(lon[0:3])+float(lon[3:])/60
-        if text[3] == "S":
-            self.lat = -self.lat
-        if text[5] == "W":
-            self.lon = -self.lon
-        return True
-
-    def parse_gps_VTG(self, text, i):
-        if text[7] == '':
-            if print_debug("Empty speed (line {})".format(i)):
-                print(text)
-            return False
-        else:
-            self.speed = text[7]
-        if text[1] == '':
-            if print_debug("Empty bearing (line {})".format(i)):
-                print(text)
-            return False
-        else:
-            self.bearing = text[1]
-        return True
 
     def load_lte_console(self):
         if os.path.isfile("/sbin/uci"):
