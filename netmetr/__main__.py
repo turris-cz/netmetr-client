@@ -10,7 +10,6 @@ import argparse
 import datetime
 import tempfile
 import ssl
-import serial
 
 from urllib import request
 
@@ -424,109 +423,6 @@ class Netmetr:
             print_error("GPS problem.")
             self.location = None
 
-    def load_lte_console(self):
-        if os.path.isfile("/sbin/uci"):
-            process = subprocess.Popen(
-                    ["uci", "-q", "get", "netmetr.settings.lte_console_path"],
-                    stdout=subprocess.PIPE
-            )
-            if process.wait() == 0:
-                self.lte_console_path = process.stdout.read()[:-1]
-            else:
-                self.lte_console_path = None
-        else:
-            self.lte_console_path = None
-            print_info(
-                    "LTE console path can't be loaded (uci missing)."
-                    " You can specify it via CLI."
-            )
-
-    def set_lte_console(self, path):
-        self.lte_console_path = path
-        if os.path.isfile("/sbin/uci"):
-            subprocess.call([
-                    "uci",
-                    "set",
-                    "netmetr.settings.lte_console_path="
-                    + self.lte_console_path
-                ])
-            subprocess.call(["uci", "commit"])
-        else:
-            print_info(
-                'LTE console path not saved (uci missing).'
-            )
-
-    def disable_lte(self):
-        self.lte_console_path = None
-        if os.path.isfile("/sbin/uci"):
-            subprocess.call([
-                    "uci",
-                    "delete",
-                    "netmetr.settings.lte_console_path"
-                ])
-            subprocess.call(["uci", "commit"])
-
-    def measure_lte(self):
-        if not self.lte_console_path:
-            return
-        if not os.path.exists(self.lte_console_path):
-            print_error("LTE special file not found!")
-            self.lte_console_path = None
-            return
-        print_progress("Starting LTE measurement.")
-        try:
-            with serial.Serial(
-                self.lte_console_path,
-                baudrate=115200,
-                timeout=5
-            ) as ser:
-                self.parse_lte_console(ser)
-        except:
-            print_error("LTE problem.")
-            self.lte_console_path = None
-
-    def parse_lte_console(self, console):
-        console.write("AT!GSTATUS?\r")
-        self.lte = dict()
-        value_map = {
-            "LTE bw": "Bandwidth",
-            "PCC RxM RSSI": "RSSI",
-            "PCC RxM RSRP": "RSRP",
-            "RSRQ (dB)": "RSRQ",
-            "SINR (dB)": "SINR Rx[0]",
-        }
-        while True:
-            line = console.readline()
-            if len(line) == 4:  # this is "OK\r\n"
-                break
-            for value_pair in line.split("\t"):
-                value_pair = value_pair.split(":")
-                value_name = value_map.get(value_pair[0], None)
-                if value_name:
-                    self.lte[value_name] = value_pair[1].split()[0]
-
-        console.write("AT!LTEINFO?\r")
-        while True:
-            line = console.readline()
-            if len(line) < 3:
-                continue
-            split_line = line.split()
-            if len(line) == 4:  # this is "OK\r\n"
-                if print_debug("LTE results:"):
-                    print(json.dumps(self.lte, indent=2))
-                break
-            if split_line[0] == "Serving:":
-                line = console.readline()
-                split_line = line.split()
-                self.lte["MCC"] = split_line[1]
-                self.lte["MNC"] = split_line[2]
-                self.lte["LAC"] = split_line[3]
-                self.lte["Cell Id"] = int(split_line[4], 16)
-                self.lte["PCI"] = split_line[9]
-            if split_line[0] == "InterFreq:" and split_line[1] == "EARFCN":
-                line = console.readline()
-                self.lte["DL EARFCN"] = line.split()[0]
-
 
 def uci_get(var):
     if os.path.isfile("/sbin/uci"):
@@ -641,15 +537,6 @@ def prepare_parser():
         ' gps location monitoring'
     )
     parser.add_argument(
-        '--set-lte-console', nargs=1,
-        help='set path to LTE modul serial console. The LTE must be enabled to'
-        ' measure LTE parametres with every speed test.'
-    )
-    parser.add_argument(
-        '--disable-lte', action='store_true', help='disable'
-        ' lte parametres monitoring'
-    )
-    parser.add_argument(
         '--fallback-control-server-url', type=str, nargs=1, default=['control.netmetr.cz'],
         help='Set fallback control server to run test against in case it is not'
         ' configured in UCI'
@@ -701,16 +588,6 @@ def main():
     # Request uuid from the control server
     netmetr.load_uuid()
 
-    # LTE
-    if args.disable_lte:
-        netmetr.lte_console_path = None
-        uci_del("lte_console_path")
-    else:
-        if args.set_lte_console:
-            netmetr.lte_console_path = args.set_lte_console[0]
-            uci_set("lte_console_path", netmetr.lte_console_path)
-        else:
-            netmetr.lte_console_path = uci_get("lte_console_path")
     # GPS
     if args.disable_gps:
         netmetr.gps_console_path = None
@@ -725,9 +602,6 @@ def main():
     if (not args.no_run):
         # Run gps first
         netmetr.measure_gps()
-
-        # Run lte test
-        netmetr.measure_lte()
 
         # Request test settings from the control server
         netmetr.request_settings()
