@@ -11,7 +11,6 @@ import datetime
 import tempfile
 import ssl
 import serial
-import csv
 
 from urllib import request
 
@@ -528,43 +527,6 @@ class Netmetr:
                 line = console.readline()
                 self.lte["DL EARFCN"] = line.split()[0]
 
-    def export_csv(self, path):
-        table = list()
-        table.append(time.strftime('%d.%m.%Y %H:%M'))
-        table.extend([''] * 19)
-        table[7] = round(self.dl_speed)
-        if self.lte_console_path:
-            table[3] = self.lte['RSRP']
-            table[4] = self.lte['SINR Rx[0]']
-            table[5] = self.lte['RSRQ']
-            table[6] = self.lte['RSSI']
-            table[8] = self.lte['MCC']
-            table[9] = self.lte['MNC']
-            table[10] = self.lte['LAC']
-            table[11] = self.lte['Cell Id']
-            table[12] = self.lte['PCI']
-            table[13] = self.lte['DL EARFCN']
-            table[14] = self.lte['Bandwidth']
-        if self.gps_console_path:
-            table[1] = "{:.6f}".format(float(self.lat))
-            table[2] = "{:.6f}".format(float(self.lon))
-        if os.path.isfile(path):
-            with open(path, 'a') as csvfile:
-                    writer = csv.writer(csvfile, delimiter=',')
-                    writer.writerow(table)
-        else:
-            with open(path, 'w') as csvfile:
-                writer = csv.writer(csvfile, delimiter=',')
-                writer.writerows([(
-                    time.strftime('%d.%m.%Y %H:%M'), "Lat", "Long",
-                    "RSRP", "SINR Rx[0]",
-                    "RSRQ", "RSSI", "IP Thrpt DL", "MCC", "MNC", "LAC",
-                    "Cell Id", "PCI", "DL EARFCN", "Bandwidth", "QPSK Rate",
-                    "16-QAM Rate", "64-QAM Rate", "256-QAM Rate",
-                    "Carrier Aggregation DL"
-                )])
-                writer.writerow(table)
-
 
 def uci_get(var):
     if os.path.isfile("/sbin/uci"):
@@ -688,11 +650,6 @@ def prepare_parser():
         ' lte parametres monitoring'
     )
     parser.add_argument(
-        '--export-csv', nargs=1,
-        help='set export of LTE, GPS and other measurement results to a CSV'
-        ' file. If the file already exists the output will be appended.'
-    )
-    parser.add_argument(
         '--fallback-control-server-url', type=str, nargs=1, default=['control.netmetr.cz'],
         help='Set fallback control server to run test against in case it is not'
         ' configured in UCI'
@@ -788,10 +745,6 @@ def main():
 
         # Upload result to the control server
         netmetr.upload_result(shortest_ping, speed_result, speed_flows)
-
-    # Optionally export csv
-    if (args.export_csv):
-        netmetr.export_csv(args.export_csv[0])
 
     # Optionally download measurement history from the control server
     if (args.dwlhist):
