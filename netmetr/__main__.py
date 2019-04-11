@@ -12,9 +12,11 @@ import tempfile
 import ssl
 import serial
 import csv
-import math
 
 from urllib import request
+
+from .exceptions import ConfigError, RunError
+from .gps import Location
 
 
 RMBT_BIN = "rmbt"
@@ -41,6 +43,7 @@ class Netmetr:
             "date",
             "+%Z"
         ])[:-1].decode()
+        self.location = None
 
         self.control_server = uci_get("control_server")
         if not self.control_server:
@@ -316,14 +319,14 @@ class Netmetr:
             "version_code": "1",
             "developer_code": 0
         }
-        if self.gps_console_path:
+        if self.location:
             req_json["geoLocations"] = [{
-                "geo_lat": self.lat,
-                "geo_long": self.lon,
-                "accuracy": self.hepe,
-                "altitude": self.altitude,
-                "bearing": self.bearing,
-                "speed": self.velocity,
+                "geo_lat": self.location.lat,
+                "geo_long": self.location.lon,
+                "accuracy": self.location.hepe,
+                "altitude": self.location.altitude,
+                "bearing": self.location.bearing,
+                "speed": self.location.velocity,
                 "tstamp": self.get_time(),
                 "provider": "gps"
             }]
@@ -409,94 +412,18 @@ class Netmetr:
         self.download_sync_code()
 
     def measure_gps(self):
-        """ Measure GPS based on at command "at!gpsloc?"
-        Example output:
-
-            Lat: 49 Deg 44 Min 57.00 Sec N  (0x008D823D)
-            Lon: 13 Deg 22 Min 48.54 Sec E  (0x00260F21)
-            Time: 2018 11 21 2 10:10:02 (GPS)
-            LocUncAngle: 0.0 deg  LocUncA: 192 m  LocUncP: 13 m  HEPE: 192.439 m
-            3D Fix
-            Altitude: 332 m  LocUncVe: 64.0 m
-            Heading: 0.0 deg  VelHoriz: 0.0 m/s  VelVert: 0.0 m/s
-
-            OK
-
-        We are going to parse it line by line in this very order
-        """
         if not self.gps_console_path:
             return
-        if not os.path.exists(self.gps_console_path):
-            print_error("GPS special file not found!")
-            self.gps_console_path = None
-            return
-
         print_progress("Starting GPS measurement.")
+
         try:
-            with serial.Serial(self.gps_console_path, timeout=5) as console:
-                console.write(b"AT!GPSLOC?\r")
-
-                console.readline()  # AT command echo
-                line = console.readline().decode("utf-8")  # Latitude
-                line_split = line.split(":")
-                if line_split[0] == "Lat":
-                    line_split = line_split[1].split()
-                    lat = (float(line_split[0]) +
-                           float(line_split[2]) / 60 +
-                           float(line_split[4]) / 3600)
-                    if line_split[6] == "S":
-                        lat = -lat
-                    self.lat = lat
-                else:
-                    raise Exception("Latitude measurement failed")
-
-                line = console.readline().decode("utf-8")  # Longitude
-                line_split = line.split(":")
-                if line_split[0] == "Lon":
-                    line_split = line_split[1].split()
-                    lon = (float(line_split[0]) +
-                           float(line_split[2]) / 60 +
-                           float(line_split[4]) / 3600)
-                    if line_split[6] == "W":
-                        lon = -lon
-                    self.lon = lon
-                else:
-                    raise Exception("Longitude measurement failed")
-
-                console.readline()  # Time
-                line = console.readline().decode("utf-8")  # HEPE (Accuracy)
-                line_split = line.split(":")
-                if line_split[0] == "LocUncAngle":
-                    line_split = line_split[4].split()
-                    self.hepe = float(line_split[0])
-                else:
-                    raise Exception("HEPE measurement failed")
-
-                console.readline()  # 3DFix
-                line = console.readline().decode("utf-8")  # Altitude
-                line_split = line.split(":")
-                if line_split[0] == "Altitude":
-                    line_split = line_split[1].split()
-                    self.altitude = float(line_split[0])
-                else:
-                    raise Exception("Altitude measurement failed")
-
-                line = console.readline().decode("utf-8")  # Heading
-                line_split = line.split(":")
-                if line_split[0] == "Heading":
-                    split_h = line_split[1].split()
-                    self.bearing = float(split_h[0])
-                    # vertical and horizontal velocity measured in m/s
-                    split_vh = line_split[2].split()
-                    vh = float(split_vh[0])
-                    split_vv = line_split[3].split()
-                    vv = float(split_vv[0])
-                    self.velocity = math.sqrt(vv**2 + vh**2)
-                else:
-                    raise Exception("Heading / velocity measurement failed")
-        except Exception:
+            self.location = Location(self.gps_console_path)
+        except ConfigError as e:
+            print_error(str(e))
+            self.location = None
+        except RunError:
             print_error("GPS problem.")
-            self.gps_console_path = None
+            self.location = None
 
     def load_lte_console(self):
         if os.path.isfile("/sbin/uci"):
