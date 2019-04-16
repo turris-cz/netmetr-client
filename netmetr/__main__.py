@@ -94,7 +94,7 @@ class Netmetr:
 
         resp = request.urlopen(req, data.encode(), context=ctx)
 
-        return json.loads(resp.read())
+        return json.loads(resp.read().decode("utf-8"))
 
     def load_uuid(self):
         """Checks the uci config for uuid and loads it to the
