@@ -15,6 +15,7 @@ from urllib import request
 
 from .exceptions import ConfigError, RunError
 from .gps import Location
+from .network import get_network_type
 
 
 RMBT_BIN = "rmbt"
@@ -296,7 +297,7 @@ class Netmetr:
             "client_software_version": "0.3",
             "geoLocations": [],
             "model": self.model,
-            "network_type": 98,
+            "network_type": get_network_type(),
             "platform": "RMBT",
             "product": "os: "+self.os_version+" hw: "+self.hw_version,
             "test_bytes_download": test_result_json.get("res_total_bytes_dl"),
