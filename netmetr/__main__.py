@@ -104,7 +104,7 @@ class Netmetr:
         self.uuid = uci_get("uuid")
         if not self.uuid:
             print_info('Uuid not found, requesting new one.')
-            self.uuid = 0
+            self.uuid = None
 
         # the download request must be sent all the time - either to raquest
         # new uuid or to check the existing one
