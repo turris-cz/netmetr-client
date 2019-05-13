@@ -76,14 +76,13 @@ class Netmetr:
     def get_time(cls):
         return str(int(round(calendar.timegm(time.gmtime())*1000)))
 
-    def send_request(self, req_json, uri):
-        req = request.Request(
-            "{}://{}/RMBTControlServer/{}".format(
+    def send_request(self, req_json, path):
+        url = "{}://{}/RMBTControlServer/{}".format(
                 "https" if USE_TLS else "http",
                 self.control_server,
-                uri
-            )
+                path
         )
+        req = request.Request(url)
         req.add_header('Accept', 'application/json')
         req.add_header('Content-Type', 'application/json')
         data = json.dumps(req_json)
@@ -127,10 +126,9 @@ class Netmetr:
             "version_name": "1.0",
         }
 
-        if print_debug("Test settings request:"):
-            print(json.dumps(req_json, indent=2))
-        # Send the request
+        log_request(req_json, self.control_server, "settings")
         resp_json = self.send_request(req_json, 'settings')
+        log_response(resp_json)
         uuid_new = resp_json["settings"][0].get("uuid", '')
         if uuid_new:  # New uuid was received
             self.uuid = uuid_new
@@ -138,8 +136,6 @@ class Netmetr:
             uci_del("sync_code")
         else:
             self.uuid = req_json['uuid']
-        if print_debug("Test settings response:"):
-            print(json.dumps(resp_json, indent=2))
 
     def request_settings(self):
         """Creates a http request to get test token, number of threads, number
@@ -156,14 +152,9 @@ class Netmetr:
             "version": "0.1",
             "version_code": "1"
         }
-        if print_debug("Test testRequest request"):
-            print(json.dumps(req_json, indent=2))
-
-        # Send the request
+        log_request(req_json, self.control_server, "testRequest")
         resp_json = self.send_request(req_json, 'testRequest')
-
-        if print_debug("Test testRequest response:"):
-            print(json.dumps(resp_json, indent=2))
+        log_response(resp_json)
 
         self.test_server_address = resp_json["test_server_address"]
         self.test_server_port = resp_json["test_server_port"]
@@ -329,15 +320,13 @@ class Netmetr:
                 "tstamp": self.get_time(),
                 "provider": "gps"
             }]
-        if print_debug("Save result request (without speed array and pings)"):
-            print(json.dumps(req_json, indent=2))
+
+        req_json["pings"] = []
+        log_request(req_json, self.control_server, "result", msg="(speed detail omitted)")
 
         req_json["speed_detail"] = speed_array
-        req_json["pings"] = []
-
         resp_json = self.send_request(req_json, 'result')
-        if print_debug("Save result response:"):
-            print(json.dumps(resp_json, indent=2))
+        log_response(resp_json)
 
     def download_history(self):
         """Creates a http request and ask the control server for a measurement
@@ -357,14 +346,10 @@ class Netmetr:
             "uuid": self.uuid,
         }
 
-        if print_debug(
-                "Downloading measurement history from the control server."):
-            print(json.dumps(req_json, indent=2))
-        # Send the request
+        print_debug("Download measurement history from the control server.")
+        log_request(req_json, self.control_server, "history")
         resp_json = self.send_request(req_json, 'history')
-
-        if print_debug("Measurement history response:"):
-            print(json.dumps(resp_json, indent=2))
+        log_response(resp_json)
 
         _, self.hist_file = tempfile.mkstemp()
         try:
@@ -387,15 +372,10 @@ class Netmetr:
             "uuid": self.uuid,
         }
 
-        if print_debug(
-            "Downloading synchronization code from the control server."
-        ):
-            print(json.dumps(req_json, indent=2))
-        # Send the request
+        print_debug("Download sync code from the control server.")
+        log_request(req_json, self.control_server, "sync")
         resp_json = self.send_request(req_json, 'sync')
-
-        if print_debug("Synchronization token response:"):
-            print(json.dumps(resp_json, indent=2))
+        log_response(resp_json)
 
         if not resp_json["error"]:
             self.sync_code = resp_json["sync"][0].get("sync_code", '')
@@ -491,6 +471,21 @@ def print_error(msg):
         print('\033[41mERROR: ' + msg + '\033[0m')
     else:
         print('ERROR: {}'.format(msg))
+
+
+def log_request(req, addr, path, msg=""):
+    url = "{}://{}/RMBTControlServer/{}".format(
+            "https" if USE_TLS else "http",
+            addr,
+            path
+    )
+    if print_debug("Sending the following request to {}\n{}".format(url, msg)):
+            print(json.dumps(req, indent=2))
+
+
+def log_response(resp):
+    if print_debug("response:"):
+        print(json.dumps(resp, indent=2))
 
 
 def prepare_parser():
