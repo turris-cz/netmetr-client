@@ -26,18 +26,24 @@ class Location:
         if not os.path.exists(console_path):
             raise ConfigError("GPS special file not found!")
 
-        with serial.Serial(console_path, timeout=5) as console:
-            console.write(b"AT!GPSLOC?\r")
-            console.readline()  # AT command echo
+        try:
+            with serial.Serial(console_path, timeout=5) as console:
+                self._fetch_console(console)
+        except serial.serialutil.SerialException as e:
+            raise RunError("GPS measurement failed ({})".format(e))
 
-            self.lat = get_lat(console.readline().decode("utf-8"))
-            self.lon = get_lon(console.readline().decode("utf-8"))
-            console.readline()  # Time
-            self.hepe = get_hepe(console.readline().decode("utf-8"))
-            console.readline()  # 3DFix
-            self.altitude = get_alt(console.readline().decode("utf-8"))
-            self.bearing, self.velocity = get_heading_velocity(
-                    console.readline().decode("utf-8"))
+    def _fetch_console(self, console):
+        console.write(b"AT!GPSLOC?\r")
+        console.readline()  # AT command echo
+
+        self.lat = get_lat(console.readline().decode("utf-8"))
+        self.lon = get_lon(console.readline().decode("utf-8"))
+        console.readline()  # Time
+        self.hepe = get_hepe(console.readline().decode("utf-8"))
+        console.readline()  # 3DFix
+        self.altitude = get_alt(console.readline().decode("utf-8"))
+        self.bearing, self.velocity = get_heading_velocity(
+                console.readline().decode("utf-8"))
 
 
 def get_lat(line):
