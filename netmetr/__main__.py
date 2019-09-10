@@ -13,6 +13,7 @@ import ssl
 
 from urllib import request
 
+from . import __version__
 from .exceptions import ConfigError, RunError
 from .gps import Location
 from .network import get_network_type
@@ -492,6 +493,12 @@ def prepare_parser():
             description="NetMetr - client"
             " application for download and upload speed measurement."
     )
+    parser.add_argument(
+        "-v", "--version",
+        action="version",
+        version="%(prog)s {}".format(__version__)
+    )
+
     parser.add_argument(
         '--rwait', nargs=1, type=int, default=[0],
         help='delay for a random amount of time up to RWAIT seconds before'
