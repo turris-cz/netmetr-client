@@ -21,11 +21,14 @@
 
 from setuptools import setup
 
+from netmetr import __version__
+
 DESCRIPTION = "Netmetr client (basically a wrapper around RMBT binary)"
+
 
 setup(
     name='netmetr',
-    version="1.5.2",
+    version=__version__,
     author='CZ.NIC, z.s.p.o. (http://www.nic.cz/)',
     author_email='martin.prudek@nic.cz',
     packages=[
