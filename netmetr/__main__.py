@@ -20,7 +20,6 @@ from .network import get_network_type
 
 RMBT_BIN = "rmbt"
 HIST_FILE = "/tmp/netmetr-history.json"
-# FALLBACK_CTRL_SRV = "netmetr-control.labs.nic.cz"
 FALLBACK_CTRL_SRV = "control.netmetr.cz"
 FALLBACK_MAX_HISTORY_LOGS = 10
 FALLBACK_CLIENT_TYPE = "HW-PROBE"
@@ -90,7 +89,6 @@ class Netmetr:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
         ctx.verify_mode = ssl.CERT_REQUIRED
         ctx.set_default_verify_paths()
-        # ctx.load_verify_locations("/etc/ssl/www_turris_cz_ca.pem")
 
         resp = request.urlopen(req, data.encode(), context=ctx)
 
@@ -130,7 +128,7 @@ class Netmetr:
         resp_json = self.send_request(req_json, 'settings')
         log_response(resp_json)
         uuid_new = resp_json["settings"][0].get("uuid", '')
-        if uuid_new:  # New uuid was received
+        if uuid_new:
             self.uuid = uuid_new
             uci_set("uuid", self.uuid)
             uci_del("sync_code")
