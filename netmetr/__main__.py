@@ -10,6 +10,7 @@ import argparse
 import datetime
 import tempfile
 import ssl
+from typing import Optional
 
 from urllib import request
 
@@ -73,8 +74,8 @@ class Netmetr:
         else:
             self.hw_version = "unknown"
 
-    def get_time(cls):
-        return str(int(round(calendar.timegm(time.gmtime())*1000)))
+    def get_time(cls) -> int:
+        return int(round(calendar.timegm(time.gmtime())*1000))
 
     def send_request(self, req_json, path):
         url = "{}://{}/RMBTControlServer/{}".format(
@@ -164,7 +165,7 @@ class Netmetr:
         self.test_server_encryption = resp_json["test_server_encryption"]
         self.test_duration = resp_json["test_duration"]
 
-    def measure_pings(self):
+    def measure_pings(self) -> Optional[int]:
         """Run serie of pings to the test server and computes & saves
          the lowest one
         """
@@ -187,12 +188,12 @@ class Netmetr:
                     ping_values.append(ping)
                 except:
                     print("Problem decoding pings.")
-                    return ''
+                    return None
                 time.sleep(0.5)
         try:
             return min(int(s) for s in ping_values)
         except:
-            return ''
+            return None
 
     def measure_speed(self):
         """Start RMBT client with saved arguments to measure the speed
@@ -276,48 +277,49 @@ class Netmetr:
             print(e)
         return speed_array
 
-    def upload_result(self, pres, test_result_json, speed_array):
-        """Uploads the tests result to the control server.
+    def upload_result(self, ping_shortest: int, test_res, speed_array):
+        """Uploads test result to the control server.
+
+        :param ping_shortest: Minimal latency in nanoseconds
+        :param test_res: JSON with the test result (obtained from RMBT binary)
+        :param speed_array: Array describing speed test progress over time.
         """
+
+        # See https://control.netmetr.cz/RMBTControlServer/api/v1/openapi#/default/post_result
+        # for schema definition types from there are written as a comments
+        # bellow
         req_json = {
-            "client_language": self.language,
-            "client_name": "RMBT",
-            "client_uuid": self.uuid,
-            "client_version": "0.1",
-            "client_software_version": "0.3",
+            "client_language": self.language,  # str
+            "client_name": "RMBT",  # str
+            "client_version": "0.1",  # str
+            "client_software_version": "0.3",  # str
             "geoLocations": [],
-            "model": self.model,
-            "network_type": get_network_type(),
-            "platform": "RMBT",
-            "product": "os: "+self.os_version+" hw: "+self.hw_version,
-            "test_bytes_download": test_result_json.get("res_total_bytes_dl"),
-            "test_bytes_upload": test_result_json.get("res_total_bytes_ul"),
-            "test_nsec_download": test_result_json.get("res_dl_time_ns"),
-            "test_nsec_upload": test_result_json.get("res_ul_time_ns"),
-            "test_num_threads": test_result_json.get("res_dl_num_flows"),
-            "test_ping_shortest": pres,
-            "num_threads_ul": test_result_json.get("res_ul_num_flows"),
-            "test_speed_download": self.dl_speed,
-            "test_speed_upload": test_result_json.get(
+            "model": self.model,  # str
+            "network_type": get_network_type(),  # int
+            "product": "os: "+self.os_version+" hw: "+self.hw_version,  # str
+            "test_bytes_download": test_res.get("res_total_bytes_dl"),  # int
+            "test_bytes_upload": test_res.get("res_total_bytes_ul"),  # int
+            "test_nsec_download": test_res.get("res_dl_time_ns"),  # int
+            "test_nsec_upload": test_res.get("res_ul_time_ns"),  # int
+            "test_num_threads": test_res.get("res_dl_num_flows"),  # int
+            "test_ping_shortest": ping_shortest,  # int
+            "num_threads_ul": test_res.get("res_ul_num_flows"),  # int
+            "test_speed_download": self.dl_speed,  # int
+            "test_speed_upload": test_res.get(
                 "res_ul_throughput_kbps"
-            ),
-            "test_token": self.test_token,
-            "test_uuid": self.test_uuid,
-            "timezone": self.timezone,
-            "type": "DESKTOP",
-            "version_code": "1",
-            "developer_code": 0
+            ),  # int
+            "test_token": self.test_token,  # str
         }
         if self.location:
             req_json["geoLocations"] = [{
-                "geo_lat": self.location.lat,
-                "geo_long": self.location.lon,
-                "accuracy": self.location.hepe,
-                "altitude": self.location.altitude,
-                "bearing": self.location.bearing,
-                "speed": self.location.velocity,
-                "tstamp": self.get_time(),
-                "provider": "gps"
+                "geo_lat": self.location.lat,  # float
+                "geo_long": self.location.lon,  # float
+                "accuracy": self.location.hepe,  # float
+                "altitude": self.location.altitude,  # float
+                "bearing": self.location.bearing,  # float
+                "speed": self.location.velocity,  # float
+                "tstamp": self.get_time(),  # int
+                "provider": "gps"  # str
             }]
 
         req_json["pings"] = []
