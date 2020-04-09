@@ -30,6 +30,9 @@ COLORED_OUTPUT = None
 USE_TLS = True
 DEFAULT_LANG = "en_US"
 
+EXIT_MISSING_RMBT = 1
+EXIT_CONFIG = 2
+
 
 def get_default_language():
     lang = locale.getdefaultlocale()[0]
@@ -209,26 +212,33 @@ class Netmetr:
         except Exception as e:
             print("Error creating config file")
             print(e)
-            return ''
+            exit(EXIT_CONFIG)
 
         encryption = {True: " -e "}
         print_progress("Starting speed test...")
-        test_result = subprocess.check_output(shlex.split(
-            RMBT_BIN +
-            encryption.get(self.test_server_encryption, "") +
-            " -h " + self.test_server_address +
-            " -p " + str(self.test_server_port) +
-            " -t " + self.test_token +
-            " -f " + self.test_numthreads +
-            " -d " + self.test_duration +
-            " -u " + self.test_duration +
-            " -c " + self.config_file
-        )).decode()
-        if print_debug("Speed test result:"):
-            print(test_result)
-        test_result_json = json.loads(test_result.split("}")[1] + "}")
-        self.dl_speed = test_result_json.get("res_dl_throughput_kbps")
-        return test_result_json
+        try:
+            test_result = subprocess.check_output(shlex.split(
+                RMBT_BIN +
+                encryption.get(self.test_server_encryption, "") +
+                " -h " + self.test_server_address +
+                " -p " + str(self.test_server_port) +
+                " -t " + self.test_token +
+                " -f " + self.test_numthreads +
+                " -d " + self.test_duration +
+                " -u " + self.test_duration +
+                " -c " + self.config_file
+            )).decode()
+
+            if print_debug("Speed test result:"):
+                print(test_result)
+            test_result_json = json.loads(test_result.split("}")[1] + "}")
+            self.dl_speed = test_result_json.get("res_dl_throughput_kbps")
+            return test_result_json
+
+        except OSError as e:
+            print_error("Speed measurement failed: {}".format(e))
+            exit(EXIT_MISSING_RMBT)
+
 
     def import_speed_flows(self):
         """The speedtest flow is saved to a file during the test. This function
@@ -618,9 +628,6 @@ def main():
 
         # Get the speed measurement result
         speed_result = netmetr.measure_speed()
-        if speed_result == '':
-            quit()
-
         # Get detailed test statistics
         speed_flows = netmetr.import_speed_flows()
 
