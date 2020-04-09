@@ -50,12 +50,14 @@ class Netmetr:
 
         self.control_server = uci_get("control_server")
         if not self.control_server:
-            print_info("Control server not found, falling to: {}".format(FALLBACK_CTRL_SRV))
+            print_info("Control server not found, falling to: {}"
+                       .format(FALLBACK_CTRL_SRV))
             self.control_server = FALLBACK_CTRL_SRV
             uci_set("control_server", FALLBACK_CTRL_SRV)
         self.client = uci_get("client")
         if not self.client:
-            print_info("Client type not found, falling to: {}".format(FALLBACK_CLIENT_TYPE))
+            print_info("Client type not found, falling to: {}"
+                       .format(FALLBACK_CLIENT_TYPE))
             self.client = FALLBACK_CLIENT_TYPE
             uci_set("client", FALLBACK_CLIENT_TYPE)
 
@@ -239,7 +241,6 @@ class Netmetr:
             print_error("Speed measurement failed: {}".format(e))
             exit(EXIT_MISSING_RMBT)
 
-
     def import_speed_flows(self):
         """The speedtest flow is saved to a file during the test. This function
         imports it so it could be sent to the control server.
@@ -337,7 +338,8 @@ class Netmetr:
             }]
 
         req_json["pings"] = []
-        log_request(req_json, self.control_server, "result", msg="(speed detail omitted)")
+        log_request(req_json, self.control_server, "result",
+                    msg="(speed detail omitted)")
 
         req_json["speed_detail"] = speed_array
         resp_json = self.send_request(req_json, 'result')
@@ -349,7 +351,8 @@ class Netmetr:
         """
         max_history_logs = uci_get("max_history_logs")
         if not max_history_logs:
-            print_info("Max history logs not found, falling to {}".format(FALLBACK_MAX_HISTORY_LOGS))
+            print_info("Max history logs not found, falling to {}"
+                       "".format(FALLBACK_MAX_HISTORY_LOGS))
             max_history_logs = FALLBACK_MAX_HISTORY_LOGS
             uci_set("max_history_logs", max_history_logs)
 
@@ -554,13 +557,15 @@ def prepare_parser():
         ' gps location monitoring'
     )
     parser.add_argument(
-        '--fallback-control-server-url', type=str, nargs=1, default=['control.netmetr.cz'],
-        help='Set fallback control server to run test against in case it is not'
-        ' configured in UCI'
+        '--fallback-control-server-url', type=str, nargs=1,
+        default=['control.netmetr.cz'],
+        help='Set fallback control server to run test against in case it is '
+             'not configured in UCI'
     )
     parser.add_argument(
-        '--unsecure-connection', action='store_true', help='use HTTP instead of HTTPS'
-        ' when communicating with control server API'
+        '--unsecure-connection', action='store_true',
+        help='use HTTP instead of HTTPS when communicating with control '
+             'server API'
     )
 
     return parser
