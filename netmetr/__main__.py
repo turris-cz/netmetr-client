@@ -249,6 +249,10 @@ class Netmetr:
 
         speed_array = list()
         for d_short, d_long in directions.items():
+            if d_short not in flows_json["res_details"]:
+                print('Direction {} not found in flows data.'.format(d_long))
+                continue
+
             thread = 0
             # Each direction has multiple threads
             for flow in flows_json["res_details"][d_short]:
