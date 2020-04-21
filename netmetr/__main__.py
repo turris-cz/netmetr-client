@@ -33,6 +33,11 @@ DEFAULT_LANG = "en_US"
 EXIT_MISSING_RMBT = 1
 EXIT_CONFIG = 2
 
+SPEED_RESULT_REQUIRED_FIELDS = {
+    "res_dl_throughput_kbps",
+    "res_ul_throughput_kbps",
+}
+
 
 def get_default_language():
     lang = locale.getdefaultlocale()[0]
@@ -234,7 +239,13 @@ class Netmetr:
             if print_debug("Speed test result:"):
                 print(test_result)
             test_result_json = json.loads(test_result.split("}")[1] + "}")
-            self.dl_speed = test_result_json.get("res_dl_throughput_kbps")
+
+            for field in SPEED_RESULT_REQUIRED_FIELDS:
+                if field not in test_result_json:
+                    print_error("Speed measurement failed: '{}' missing in "
+                                "result".format(field))
+                    return None
+
             return test_result_json
 
         except OSError as e:
@@ -319,7 +330,7 @@ class Netmetr:
             "test_num_threads": test_res.get("res_dl_num_flows"),  # int
             "test_ping_shortest": ping_shortest,  # int
             "num_threads_ul": test_res.get("res_ul_num_flows"),  # int
-            "test_speed_download": self.dl_speed,  # int
+            "test_speed_download": test_res.get("res_dl_throughput_kbps"),  # int
             "test_speed_upload": test_res.get(
                 "res_ul_throughput_kbps"
             ),  # int
@@ -633,11 +644,13 @@ def main():
 
         # Get the speed measurement result
         speed_result = netmetr.measure_speed()
-        # Get detailed test statistics
-        speed_flows = netmetr.import_speed_flows()
 
-        # Upload result to the control server
-        netmetr.upload_result(shortest_ping, speed_result, speed_flows)
+        if speed_result:
+            # Get detailed test statistics
+            speed_flows = netmetr.import_speed_flows()
+
+            # Upload result to the control server
+            netmetr.upload_result(shortest_ping, speed_result, speed_flows)
 
     # Optionally download measurement history from the control server
     if (args.dwlhist):
