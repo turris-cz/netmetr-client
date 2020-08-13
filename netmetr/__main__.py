@@ -13,6 +13,7 @@ import ssl
 from typing import Optional
 
 from urllib import request
+import urllib.parse
 
 from . import __version__
 from .exceptions import ConfigError, RunError
@@ -88,12 +89,7 @@ class Netmetr:
     def get_time(cls) -> int:
         return int(round(calendar.timegm(time.gmtime())*1000))
 
-    def send_request(self, req_json, path):
-        url = "{}://{}/RMBTControlServer/{}".format(
-                "https" if USE_TLS else "http",
-                self.control_server,
-                path
-        )
+    def send_request(self, req_json, url):
         req = request.Request(url)
         req.add_header('Accept', 'application/json')
         req.add_header('Content-Type', 'application/json')
@@ -106,6 +102,15 @@ class Netmetr:
         resp = request.urlopen(req, data.encode(), context=ctx)
 
         return json.loads(resp.read().decode("utf-8"))
+
+    def create_url(self, path, query_params={}):
+        url = "{}://{}/RMBTControlServer/{}".format(
+                "https" if USE_TLS else "http",
+                self.control_server,
+                path
+        )
+        params = urllib.parse.urlencode(query_params)
+        return "?".join([url, params]) if params else url
 
     def load_uuid(self):
         """Checks the uci config for uuid and loads it to the
@@ -135,8 +140,9 @@ class Netmetr:
             "version_name": CLIENT_SW_VERSION,  # optional string
         }
 
-        log_request(req_json, self.control_server, "settings")
-        resp_json = self.send_request(req_json, 'settings')
+        url = self.create_url("settings")
+        log_request(req_json, url)
+        resp_json = self.send_request(req_json, url)
         log_response(resp_json)
         uuid_new = resp_json["settings"][0].get("uuid", '')
         if uuid_new:
@@ -160,8 +166,9 @@ class Netmetr:
             "uuid": self.uuid,  # required
             "version": "0.1",  # required, test version?, values: "0.1"
         }
-        log_request(req_json, self.control_server, "testRequest")
-        resp_json = self.send_request(req_json, 'testRequest')
+        url = self.create_url("testRequest")
+        log_request(req_json, url)
+        resp_json = self.send_request(req_json, url)
         log_response(resp_json)
 
         self.test_server_address = resp_json["test_server_address"]
@@ -347,11 +354,12 @@ class Netmetr:
             }]
 
         req_json["pings"] = []
-        log_request(req_json, self.control_server, "result",
-                    msg="(speed detail omitted)")
+
+        url = self.create_url("result")
+        log_request(req_json, url, msg="(speed detail omitted)")
 
         req_json["speed_detail"] = speed_array
-        resp_json = self.send_request(req_json, 'result')
+        resp_json = self.send_request(req_json, url)
         log_response(resp_json)
 
     def download_history(self):
@@ -374,8 +382,9 @@ class Netmetr:
         }
 
         print_debug("Download measurement history from the control server.")
-        log_request(req_json, self.control_server, "history")
-        resp_json = self.send_request(req_json, 'history')
+        url = self.create_url("history")
+        log_request(req_json, url)
+        resp_json = self.send_request(req_json, url)
         log_response(resp_json)
 
         _, self.hist_file = tempfile.mkstemp()
@@ -400,8 +409,9 @@ class Netmetr:
         }
 
         print_debug("Download sync code from the control server.")
-        log_request(req_json, self.control_server, "sync")
-        resp_json = self.send_request(req_json, 'sync')
+        url = self.create_url("sync")
+        log_request(req_json, url)
+        resp_json = self.send_request(req_json, url)
         log_response(resp_json)
 
         if not resp_json["error"]:
@@ -500,12 +510,7 @@ def print_error(msg):
         print('ERROR: {}'.format(msg))
 
 
-def log_request(req, addr, path, msg=""):
-    url = "{}://{}/RMBTControlServer/{}".format(
-            "https" if USE_TLS else "http",
-            addr,
-            path
-    )
+def log_request(req, url, msg=""):
     if print_debug("Sending the following request to {}\n{}".format(url, msg)):
             print(json.dumps(req, indent=2))
 
