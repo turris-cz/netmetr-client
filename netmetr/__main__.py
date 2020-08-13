@@ -127,12 +127,12 @@ class Netmetr:
         print_progress("Checking uuid on the control server...")
         # Create json to request uuid
         req_json = {
-            "uuid": self.uuid,
-            "language": self.language,
-            "name": "RMBT",
-            "terms_and_conditions_accepted": "true",
-            "type": "DESKTOP",
-            "version_name": CLIENT_SW_VERSION,
+            "uuid": self.uuid,  # optional, created when omitted or left None
+            "language": self.language,  # optional
+            "name": "RMBT",  # required, test server type, values: "RMBT"
+            "terms_and_conditions_accepted": "true",  # required
+            "type": "DESKTOP",  # required, client type, values: "DESKTOP" or "MOBILE"
+            "version_name": CLIENT_SW_VERSION,  # optional string
         }
 
         log_request(req_json, self.control_server, "settings")
@@ -152,13 +152,13 @@ class Netmetr:
         """
         print_progress("Requesting test config from the control server...")
         req_json = {
-            "client": "HW-PROBE",
-            "language": self.language,
-            "time": self.get_time(),
-            "timezone": self.timezone,
-            "type": "DESKTOP",
-            "uuid": self.uuid,
-            "version": "0.1",
+            "client": "HW-PROBE",  # required, values: "HW-PROBE", "RMBT", etc
+            "language": self.language,  # optional
+            "time": self.get_time(),  # required
+            "timezone": self.timezone,  # required
+            "type": "DESKTOP",  # required, client type, values: "DESKTOP", "MOBILE"
+            "uuid": self.uuid,  # required
+            "version": "0.1",  # required, test version?, values: "0.1"
         }
         log_request(req_json, self.control_server, "testRequest")
         resp_json = self.send_request(req_json, 'testRequest')
@@ -314,9 +314,9 @@ class Netmetr:
         # bellow
         req_json = {
             "client_language": self.language,  # str
-            "client_name": "HW-PROBE",  # str
-            "client_version": "0.1",  # str
-            "client_software_version": CLIENT_SW_VERSION,  # str
+            "client_name": "HW-PROBE",  # required, values: "HW-PROBE", "RMBT", etc
+            "client_version": "0.1",  # required, values: "0.1"
+            "client_software_version": CLIENT_SW_VERSION,  # optional string
             "geoLocations": [],
             "model": self.model,  # str
             "network_type": get_network_type(),  # int
