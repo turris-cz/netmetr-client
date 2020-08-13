@@ -140,7 +140,7 @@ class Netmetr:
             "version_name": CLIENT_SW_VERSION,  # optional string
         }
 
-        url = self.create_url("settings")
+        url = self.create_url("settings", query_params={"skip_history": "true"})
         log_request(req_json, url)
         resp_json = self.send_request(req_json, url)
         log_response(resp_json)
