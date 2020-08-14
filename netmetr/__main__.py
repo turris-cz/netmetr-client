@@ -29,6 +29,7 @@ DEBUG = None
 COLORED_OUTPUT = None
 USE_TLS = True
 DEFAULT_LANG = "en_US"
+CLIENT_SW_VERSION = "Python netmetr client v{}".format(__version__)
 
 EXIT_MISSING_RMBT = 1
 EXIT_CONFIG = 2
@@ -128,12 +129,10 @@ class Netmetr:
         req_json = {
             "uuid": self.uuid,
             "language": self.language,
-            "timezone": self.timezone,
             "name": "RMBT",
             "terms_and_conditions_accepted": "true",
             "type": "DESKTOP",
-            "version_code": "1",
-            "version_name": "1.0",
+            "version_name": CLIENT_SW_VERSION,
         }
 
         log_request(req_json, self.control_server, "settings")
@@ -160,7 +159,6 @@ class Netmetr:
             "type": "DESKTOP",
             "uuid": self.uuid,
             "version": "0.1",
-            "version_code": "1"
         }
         log_request(req_json, self.control_server, "testRequest")
         resp_json = self.send_request(req_json, 'testRequest')
@@ -316,9 +314,9 @@ class Netmetr:
         # bellow
         req_json = {
             "client_language": self.language,  # str
-            "client_name": "RMBT",  # str
+            "client_name": "HW-PROBE",  # str
             "client_version": "0.1",  # str
-            "client_software_version": "0.3",  # str
+            "client_software_version": CLIENT_SW_VERSION,  # str
             "geoLocations": [],
             "model": self.model,  # str
             "network_type": get_network_type(),  # int
