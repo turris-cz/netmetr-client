@@ -61,12 +61,6 @@ class Netmetr:
                        .format(FALLBACK_CTRL_SRV))
             self.control_server = FALLBACK_CTRL_SRV
             uci_set("control_server", FALLBACK_CTRL_SRV)
-        self.client = uci_get("client")
-        if not self.client:
-            print_info("Client type not found, falling to: {}"
-                       .format(FALLBACK_CLIENT_TYPE))
-            self.client = FALLBACK_CLIENT_TYPE
-            uci_set("client", FALLBACK_CLIENT_TYPE)
 
         if os.path.isfile("/etc/turris-version"):
             with open("/etc/turris-version", 'r') as turris_version:
