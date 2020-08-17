@@ -17,7 +17,6 @@ import urllib.parse
 
 from . import __version__
 from .exceptions import ConfigError, RunError
-from .gps import Location
 from .network import get_network_type
 
 
@@ -53,7 +52,6 @@ class Netmetr:
             "date",
             "+%Z"
         ])[:-1].decode()
-        self.location = None
 
         self.control_server = uci_get("control_server")
         if not self.control_server:
@@ -335,17 +333,6 @@ class Netmetr:
             ),  # int
             "test_token": self.test_token,  # str
         }
-        if self.location:
-            req_json["geoLocations"] = [{
-                "geo_lat": self.location.lat,  # float
-                "geo_long": self.location.lon,  # float
-                "accuracy": self.location.hepe,  # float
-                "altitude": self.location.altitude,  # float
-                "bearing": self.location.bearing,  # float
-                "speed": self.location.velocity,  # float
-                "tstamp": self.get_time(),  # int
-                "provider": "gps"  # str
-            }]
 
         req_json["pings"] = []
 
@@ -420,20 +407,6 @@ class Netmetr:
         downloaded each time because it coud be changed from time to time.
         """
         self.download_sync_code()
-
-    def measure_gps(self):
-        if not self.gps_console_path:
-            return
-        print_progress("Starting GPS measurement.")
-
-        try:
-            self.location = Location(self.gps_console_path)
-        except ConfigError as e:
-            print_error(str(e))
-            self.location = None
-        except RunError:
-            print_error("GPS problem.")
-            self.location = None
 
 
 def uci_get(var):
@@ -551,15 +524,6 @@ def prepare_parser():
         ' code or (with --dwlhist) to download measurement history'
     )
     parser.add_argument(
-        '--set-gps-console', nargs=1,
-        help='set path to GPS modul serial console. The GPS must be enabled to'
-        ' measure location with every speed test.'
-    )
-    parser.add_argument(
-        '--disable-gps', action='store_true', help='disable'
-        ' gps location monitoring'
-    )
-    parser.add_argument(
         '--fallback-control-server-url', type=str, nargs=1,
         default=['control.netmetr.cz'],
         help='Set fallback control server to run test against in case it is '
@@ -606,25 +570,13 @@ def main():
         if datetime.datetime.now().hour not in hours:
             return
 
+    config = Config()
+
     netmetr = Netmetr()
     # Request uuid from the control server
     netmetr.load_uuid()
 
-    # GPS
-    if args.disable_gps:
-        netmetr.gps_console_path = None
-        uci_del("gps_console_path")
-    else:
-        if args.set_gps_console:
-            netmetr.gps_console_path = args.set_gps_console[0]
-            uci_set("gps_console_path", netmetr.gps_console_path)
-        else:
-            netmetr.gps_console_path = uci_get("gps_console_path")
-
     if (not args.no_run):
-        # Run gps first
-        netmetr.measure_gps()
-
         # Request test settings from the control server
         netmetr.request_settings()
 
