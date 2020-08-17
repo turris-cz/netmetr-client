@@ -527,11 +527,6 @@ def prepare_parser():
     )
 
     parser.add_argument(
-        '--rwait', nargs=1, type=int, default=[0],
-        help='delay for a random amount of time up to RWAIT seconds before'
-        ' the test starts'
-    )
-    parser.add_argument(
         '--autostart', action='store_true', help='use this'
         ' option only when running as an automated service - to check whether'
         ' it is right time to run the test'
@@ -610,9 +605,6 @@ def main():
         hours = map(int, hours)
         if datetime.datetime.now().hour not in hours:
             return
-
-    # Wait appropriate amount of time
-    time.sleep(randint(0, args.rwait[0]))
 
     netmetr = Netmetr()
     # Request uuid from the control server
