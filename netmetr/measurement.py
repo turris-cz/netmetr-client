@@ -6,6 +6,7 @@ import tempfile
 import time
 import typing
 
+from .exceptions import MeasurementError
 from .logging import logger
 from .network import get_network_type
 
@@ -14,12 +15,18 @@ SPEED_RESULT_REQUIRED_FIELDS = {
     "res_dl_throughput_kbps",
     "res_ul_throughput_kbps",
 }
-EXIT_MISSING_RMBT = 1
-EXIT_CONFIG = 2
 
 
 class Measurement:
-    def __init__(self):
+    def __init__(self, settings):
+        self.test_server_address = settings["test_server_address"]
+        self.test_server_port = settings["test_server_port"]
+        self.test_token = settings["test_token"]
+        self.test_numthreads = settings["test_numthreads"]
+        self.test_numpings = settings["test_numpings"]
+        self.test_server_encryption = settings["test_server_encryption"]
+        self.test_duration = settings["test_duration"]
+
         if os.path.isfile("/etc/turris-version"):
             with open("/etc/turris-version", "r") as turris_version:
                 self.os_version = turris_version.read().split("\n")[0]
@@ -38,15 +45,15 @@ class Measurement:
         else:
             self.hw_version = "unknown"
 
-    def apply_test_settings(self, settings):
-        self.test_server_address = settings["test_server_address"]
-        self.test_server_port = settings["test_server_port"]
-        self.test_token = settings["test_token"]
-        self.test_uuid = settings["test_uuid"]
-        self.test_numthreads = settings["test_numthreads"]
-        self.test_numpings = settings["test_numpings"]
-        self.test_server_encryption = settings["test_server_encryption"]
-        self.test_duration = settings["test_duration"]
+    def measure(self):
+        ping_shortest = self.measure_pings()
+        speed_results = self.measure_speed()
+        if speed_results:
+            speed_flows = self.import_speed_flows() if speed_results else None
+        return (
+            self.generate_test_result(ping_shortest, speed_results),
+            speed_flows,
+        )
 
     def measure_pings(self) -> typing.Optional[int]:
         """Run serie of pings to the test server and computes & saves
@@ -69,13 +76,14 @@ class Measurement:
                     print("ping_"+str(i)+"_msec = "+format(ping, ".2f"))
                     ping = int(ping * 1000000)
                     ping_values.append(ping)
-                except:
-                    print("Problem decoding pings.")
+                except Exception as e:
+                    logger.error("Problem decoding pings: {}".format(e))
                     return None
                 time.sleep(0.5)
         try:
             return min(int(s) for s in ping_values)
-        except:
+        except Exception as e:
+            logger.error("Problem getting lowest ping: {}".format(e))
             return None
 
     def measure_speed(self):
@@ -89,10 +97,10 @@ class Measurement:
                 config_file.write(
                         '{"cnf_file_flows": "'+self.flows_file+'.xz"}'
                 )
-        except Exception as e:
-            print("Error creating config file")
-            print(e)
-            exit(EXIT_CONFIG)
+        except OSError as e:
+            raise MeasurementError("Error creating measurement config file".format(e))
+        except IOError as e:
+            raise MeasurementError("Error writing measurement config file".format(e))
 
         encryption = {True: " -e "}
         logger.progress("Starting speed test...")
@@ -109,20 +117,18 @@ class Measurement:
                 " -c " + self.config_file
             )).decode()
 
-            logger.debug("Speed test result:", test_result)
-            test_result_json = json.loads(test_result.split("}")[1] + "}")
-
-            for field in SPEED_RESULT_REQUIRED_FIELDS:
-                if field not in test_result_json:
-                    logger.error("Speed measurement failed: '{}' missing "
-                                 " in result".format(field))
-                    return None
-
-            return test_result_json
-
         except OSError as e:
-            logger.error("Speed measurement failed: {}".format(e))
-            exit(EXIT_MISSING_RMBT)
+            raise MeasurementError("Speed measurement failed: {}".format(e))
+
+        logger.debug("Speed test result:", test_result)
+        test_result_json = json.loads(test_result.split("}")[1] + "}")
+
+        for field in SPEED_RESULT_REQUIRED_FIELDS:
+            if field not in test_result_json:
+                raise MeasurementError("Speed measurement failed: '{}' missing "
+                                       " in result".format(field))
+
+        return test_result_json
 
     def import_speed_flows(self):
         """The speedtest flow is saved to a file during the test. This function
@@ -136,15 +142,14 @@ class Measurement:
             subprocess.call(shlex.split("unxz -f "+self.flows_file+".xz"))
             with open(self.flows_file, "r") as json_data:
                 flows_json = json.load(json_data)
-        except Exception as e:
-            print("Problem reading/decoding flows data.")
-            print(e)
-            return
+        except (OSError, IOError) as e:
+            logger.error("Problem reading/decoding flows data: {}".format(e))
+            return None
 
         speed_array = list()
         for d_short, d_long in directions.items():
             if d_short not in flows_json["res_details"]:
-                print("Direction {} not found in flows data.".format(d_long))
+                logger.error("Direction {} not found in flows data.".format(d_long))
                 continue
 
             thread = 0
@@ -167,20 +172,19 @@ class Measurement:
         # Remove generated files
         try:
             os.remove(self.flows_file)
-        except Exception as e:
-            print(e)
+        except OSError as e:
+            logger.error("Failed to remove flows file: {}".format(e))
         try:
             os.remove(self.config_file)
-        except Exception as e:
-            print(e)
+        except OSError as e:
+            logger.error("Failed to remove mesurement config file: {}".format(e))
         return speed_array
 
-    def get_test_result(self, ping_shortest: int, test_res, speed_array):
+    def generate_test_result(self, ping_shortest: int, test_res):
         """Uploads test result to the control server.
 
         :param ping_shortest: Minimal latency in nanoseconds
         :param test_res: JSON with the test result (obtained from RMBT binary)
-        :param speed_array: Array describing speed test progress over time.
         """
 
         # See https://control.netmetr.cz/RMBTControlServer/api/v1/openapi#/default/post_result

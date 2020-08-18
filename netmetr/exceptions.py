@@ -6,6 +6,10 @@ class ControlServerError(Exception):
     pass
 
 
+class MeasurementError(Exception):
+    pass
+
+
 class ConfigError(Exception):
     pass
 

@@ -5,7 +5,7 @@ import tempfile
 
 from .argparser import get_arg_parser
 from .control import ControlServer
-from .exceptions import ControlServerError
+from .exceptions import ControlServerError, MeasurementError
 from .logging import logger
 from .measurement import Measurement
 
@@ -49,9 +49,8 @@ def save_history(history):
         with open(hist_file, "w") as f:
                 f.write(json.dumps(history, indent=2))
         os.rename(hist_file, HIST_FILE)
-    except Exception as e:
-        print("Error saving measurement history.")
-        print(e)
+    except OSError as e:
+        logger.error("Error saving measurement history: {}".format(e))
 
 
 def main():
@@ -80,34 +79,26 @@ def main():
         uuid=config["uuid"],
         use_tls=not args.unsecure_connection
     )
+
     if control_server.uuid != config["uuid"]:
         config["uuid"] = control_server.uuid
         del config["sync_code"]
 
-    if (not args.no_run):
-        measurement = Measurement()
-
-        # Request test settings from the control server
-        test_settings = control_server.request_settings()
-        measurement.apply_test_settings(test_settings)
-
-        # Get the ping measurement result
-        shortest_ping = measurement.measure_pings()
-
-        # Get the speed measurement result
-        speed_result = measurement.measure_speed()
-
-        if speed_result:
-            # Get detailed test statistics
-            speed_flows = measurement.import_speed_flows()
-
-            # Upload result to the control server
-            result = measurement.get_test_result(shortest_ping, speed_result, speed_flows)
-            control_server.upload_result(result, speed_flows)
+    if not args.no_run:
+        try:
+            test_settings = control_server.request_settings()
+            measurement = Measurement(test_settings)
+            test_results = measurement.measure()
+            control_server.upload_result(*test_results)
+        except MeasurementError as e:
+            logger.error("Measurement failed: {}".format(e))
 
     if args.dwlhist:
-        history = control_server.download_history(config["max_history_logs"])
-        save_history(history)
+        try:
+            history = control_server.download_history(config["max_history_logs"])
+            save_history(history)
+        except ControlServerError as e:
+            logger.error("Failed to download measurement history: {}".format(e))
 
     try:
         sync_code = control_server.download_sync_code()
