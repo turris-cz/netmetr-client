@@ -2,6 +2,10 @@ class NetmetrError(Exception):
     pass
 
 
+class ControlServerError(Exception):
+    pass
+
+
 class ConfigError(Exception):
     pass
 
