@@ -1,6 +1,6 @@
-import os
-import subprocess
+import euci
 
+from .exceptions import ConfigError
 from .logging import logger
 
 
@@ -13,22 +13,43 @@ UCI_MANDATORY_OPTIONS = {
 
 class Config(dict):
     def __init__(self, def_config):
-        for option, value in def_config.items():
-            uci_value = uci_get(option)
+        self.uci = euci.EUci()
+        try:
+            config = self.uci.get(CONFIG)
+        except euci.UciExceptionNotFound as e:
+            raise ConfigError("Netmetr config not found") from e
 
-            if uci_value:
-                super().__setitem__(option, uci_value)
-            else:
+        settings = config.get(SETTINGS_SECTION)
+        if settings is None:
+            raise ConfigError("'{}' section missing in config".format(
+                SETTINGS_SECTION
+            ))
+        super().update(settings)
+
+        self._fill_missing_options(def_config)
+
+    def _fill_missing_options(self, def_config):
+        need_to_commit = False
+        for option, value in def_config.items():
+            if option not in self:
                 if option in UCI_MANDATORY_OPTIONS:
                     log_option_set(option, value)
-                    uci_set(option, value)
+                    self._uci_set(option, value)
+                    need_to_commit = True
                 else:
                     log_option_used(option, value)
+
+                if need_to_commit:
+                    self.uci.commit(CONFIG)
 
                 super().__setitem__(option, value)
 
     def __setitem__(self, option, value):
-        uci_set(option, value)
+        if self.get(option) == value:
+            return
+
+        self._uci_set(option, value)
+        self.uci.commit(CONFIG, SETTINGS_SECTION, option)
         super().__setitem__(option, value)
 
     def __delitem__(self, option):
@@ -36,44 +57,18 @@ class Config(dict):
             super().__delitem__(option)
         except KeyError:
             logger.debug("Failed to delete config option '{}'".format(option))
-        uci_del(option)
+        self.uci.delete(CONFIG, SETTINGS_SECTION, option)
+        self.uci.commit(CONFIG, SETTINGS_SECTION, option)
 
-
-def uci_get(var):
-    if os.path.isfile("/sbin/uci"):
-        # Loading control server
-        process = subprocess.Popen(
-            ["uci", "-q", "get", "netmetr.settings.{}".format(var)],
-            stdout=subprocess.PIPE
-        )
-        if process.wait() == 0:
-            return process.stdout.read()[:-1].decode()
-    return None
-
-
-def uci_set(var, value):
-    if os.path.isfile("/sbin/uci"):
-        retcode = subprocess.call([
-            "uci", "set",
-            "netmetr.settings.{}={}".format(var, value)
-        ])
-        if retcode != 0:
-            return False
-        retcode = subprocess.call(["uci", "commit"])
-        return retcode == 0
-    return False
-
-
-def uci_del(var):
-    if os.path.isfile("/sbin/uci"):
-        retcode = subprocess.call([
-            "uci", "-q", "delete",
-            "netmetr.settings.{}".format(var)
-        ])
-        if retcode != 0:
-            return False
-        retcode = subprocess.call(["uci", "commit"])
-        return retcode == 0
+    def _uci_set(self, option, value):
+        try:
+            self.uci.set(CONFIG, SETTINGS_SECTION, option, value)
+        except euci.UciException as e:
+            raise ConfigError(
+                "Failed to assign value '{}' to option '{}' in config".format(
+                    value, option
+                )
+            ) from e
 
 
 def log_option_set(option, value):

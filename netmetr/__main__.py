@@ -9,12 +9,18 @@ import tempfile
 from typing import Optional
 
 from .argparser import get_arg_parser
-from .config import Config
 from .control import ControlServer
 from .exceptions import ConfigError, RunError, ControlServerError
 from .logging import logger
 from .network import get_network_type
 
+try:
+    from .config import Config
+except ImportError as e:
+    if str(e) == "No module named 'euci'":
+        Config = dict
+    else:
+        raise e
 
 
 RMBT_BIN = "rmbt"
@@ -256,11 +262,9 @@ def save_history(history):
 def main():
     # When autostarted - check whether autostart is enabled and
     # if it is right time to run the test.
-    # In uci config, we expect hours of a day separated by commas (,)
-    # these hours
-    # are the time the test should be run. So whenever the script is started,
-    # it looks to it's config and if it finds the current hour of day in it,
-    # it will start the test
+    # We expect hours when the test should be run in uci config.
+    # So whenever the script is autostarted, it looks to it's config and if
+    # it finds the current hour of day in it, it will start the test
 
     parser = get_arg_parser()
     args = parser.parse_args()
