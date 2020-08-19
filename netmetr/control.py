@@ -32,7 +32,7 @@ class ControlServer:
 
     def _load_uuid(self):
         if not self.uuid:
-            logger.info("Uuid not found, requesting new one.")
+            logger.warning("Uuid not found, requesting new one.")
 
         # the download request must be sent all the time - either to raquest
         # new uuid or to check the existing one

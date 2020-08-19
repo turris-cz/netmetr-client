@@ -53,5 +53,9 @@ def get_arg_parser():
         "--only-config", action="store_true",
         help="Only set the default mandatory configuration and exit"
     )
+    parser.add_argument(
+        "--syslog", action="store_true",
+        help="Enable log to syslog"
+    )
 
     return parser

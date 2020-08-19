@@ -73,8 +73,8 @@ class Config(dict):
 
 
 def log_option_set(option, value):
-    logger.info("Config option '{}' not found, setting to '{}'".format(option, value))
+    logger.warning("Config option '{}' not found, setting to '{}'".format(option, value))
 
 
 def log_option_used(option, value):
-    logger.info("Config option '{}' not found, using '{}'".format(option, value))
+    logger.warning("Config option '{}' not found, using '{}'".format(option, value))

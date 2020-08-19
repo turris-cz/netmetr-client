@@ -5,6 +5,7 @@ import random
 import tempfile
 import time
 
+from . import __version__
 from .argparser import get_arg_parser
 from .control import ControlServer
 from .exceptions import ControlServerError, MeasurementError
@@ -71,7 +72,8 @@ def main():
     parser = get_arg_parser()
     args = parser.parse_args()
 
-    logger.set(args.debug, not args.no_color)
+    logger.set(args.debug, not args.no_color, args.syslog)
+    logger.info("Netmetr Python client v{} starting...".format(__version__))
     DEFAULT_CONFIG["control_server"] = args.fallback_control_server_url[0]
 
     config = Config(DEFAULT_CONFIG)
@@ -80,7 +82,7 @@ def main():
         return
 
     if args.autostart and not time_to_run(config):
-        logger.debug(
+        logger.info(
             "Autostarted but autostart disabled or not right time to run, exiting."
         )
         return

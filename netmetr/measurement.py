@@ -48,6 +48,14 @@ class Measurement:
     def measure(self):
         ping_shortest = self.measure_pings()
         speed_results = self.measure_speed()
+        logger.info(
+            "Download speed: {:.2f}Mbps, upload speed: {:.2f}Mbps, shortest "
+            "ping: {:.2f}ms".format(
+                speed_results.get("res_dl_throughput_kbps") / 1000,
+                speed_results.get("res_ul_throughput_kbps") / 1000,
+                ping_shortest / 1000000
+            )
+        )
         if speed_results:
             speed_flows = self.import_speed_flows() if speed_results else None
         return (
