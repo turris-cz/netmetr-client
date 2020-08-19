@@ -1,7 +1,9 @@
 import json
 import os
 import datetime
+import random
 import tempfile
+import time
 
 from .argparser import get_arg_parser
 from .control import ControlServer
@@ -21,10 +23,11 @@ except ImportError as e:
 HIST_FILE = "/tmp/netmetr-history.json"
 DEFAULT_CONFIG = {
     "autostart_enabled": False,
+    "autostart_delay": random.randint(0, 3600),
     "control_server": None,  # default one obtained using argparser
     "max_history_logs": 10,
     "uuid": None,
-    "hours_to_run": (),
+    "hours_to_run": (random.randint(0, 23),),
     "sync_code": None,
 }
 
@@ -39,6 +42,11 @@ def time_to_run(config):
     hours = tuple(map(int, config["hours_to_run"]))
     if datetime.datetime.now().hour not in hours:
         return False
+
+    logger.debug("Autostarted, sleeping {} seconds before run.".format(
+        config["autostart_delay"]
+    ))
+    time.sleep(config["autostart_delay"])
 
     return True
 
