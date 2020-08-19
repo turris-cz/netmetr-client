@@ -26,10 +26,22 @@ class Logger():
                 self.logger.debug(detail)
 
     def progress(self, msg):
+        """ Colored & enabled by default (parsed by foris) but treated like debug
+            by sys logger
+        """
         if self.colored:
             print("\033[93m" + msg + "\033[0m")
         else:
             print(msg)
+
+        if self.logger:
+            self.logger.debug(msg)
+
+    def output(self, msg):
+        """ Enabled by default (parsed by foris) but treated like debug by sys
+            logger
+        """
+        print(msg)
 
         if self.logger:
             self.logger.debug(msg)

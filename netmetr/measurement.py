@@ -81,7 +81,7 @@ class Measurement:
                     start = ping_result.index(b"time=") + len("time=")
                     end = ping_result.index(b" ms")
                     ping = float(ping_result[start:end])
-                    print("ping_"+str(i)+"_msec = "+format(ping, ".2f"))
+                    logger.output("ping_"+str(i)+"_msec = "+format(ping, ".2f"))
                     ping = int(ping * 1000000)
                     ping_values.append(ping)
                 except Exception as e:
@@ -112,21 +112,31 @@ class Measurement:
 
         encryption = {True: " -e "}
         logger.progress("Starting speed test...")
+        rmbt_command = shlex.split(
+            RMBT_BIN +
+            encryption.get(self.test_server_encryption, "") +
+            " -h " + self.test_server_address +
+            " -p " + str(self.test_server_port) +
+            " -t " + self.test_token +
+            " -f " + self.test_numthreads +
+            " -d " + self.test_duration +
+            " -u " + self.test_duration +
+            " -c " + self.config_file
+        )
         try:
-            test_result = subprocess.check_output(shlex.split(
-                RMBT_BIN +
-                encryption.get(self.test_server_encryption, "") +
-                " -h " + self.test_server_address +
-                " -p " + str(self.test_server_port) +
-                " -t " + self.test_token +
-                " -f " + self.test_numthreads +
-                " -d " + self.test_duration +
-                " -u " + self.test_duration +
-                " -c " + self.config_file
-            )).decode()
-
+            process = subprocess.Popen(
+                rmbt_command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
         except OSError as e:
             raise MeasurementError("Speed measurement failed: {}".format(e))
+
+        while process.poll() is None:
+            line = process.stderr.readline()
+            if line:
+                logger.output(line.decode("utf-8").strip())
+        test_result = process.stdout.read().decode("utf-8")
 
         logger.debug("Speed test result:", test_result)
         test_result_json = json.loads(test_result.split("}")[1] + "}")
