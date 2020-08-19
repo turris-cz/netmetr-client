@@ -76,6 +76,9 @@ def main():
 
     config = Config(DEFAULT_CONFIG)
 
+    if args.only_config:
+        return
+
     if args.autostart and not time_to_run(config):
         logger.debug(
             "Autostarted but autostart disabled or not right time to run, exiting."

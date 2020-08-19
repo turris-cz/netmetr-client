@@ -49,5 +49,9 @@ def get_arg_parser():
         help="use HTTP instead of HTTPS when communicating with control "
              "server API"
     )
+    parser.add_argument(
+        "--only-config", action="store_true",
+        help="Only set the default mandatory configuration and exit"
+    )
 
     return parser
