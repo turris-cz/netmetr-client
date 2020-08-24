@@ -2,17 +2,13 @@ class NetmetrError(Exception):
     pass
 
 
-class ControlServerError(Exception):
+class ControlServerError(NetmetrError):
     pass
 
 
-class MeasurementError(Exception):
+class MeasurementError(NetmetrError):
     pass
 
 
-class ConfigError(Exception):
-    pass
-
-
-class RunError(Exception):
+class ConfigError(NetmetrError):
     pass
