@@ -32,7 +32,7 @@ def main():
     parser = get_arg_parser()
     args = parser.parse_args()
 
-    logger.set(args.debug, not args.no_color, args.syslog)
+    logger.set(args.debug, not args.no_color, args.syslog, args.quiet)
     logger.info("Netmetr Python client v{} starting...".format(__version__))
 
     config = make_default_config()

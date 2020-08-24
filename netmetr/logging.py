@@ -8,10 +8,12 @@ class Logger():
         self.lvl_debug = False
         self.colored = False
         self.logger = None
+        self.quiet = False
 
-    def set(self, debug, colored, syslog):
+    def set(self, debug, colored, syslog, quiet):
         self.lvl_debug = debug
         self.colored = colored
+        self.quiet = quiet
 
         if syslog:
             self.logger = get_logger(debug)
@@ -30,9 +32,9 @@ class Logger():
             by sys logger
         """
         if self.colored:
-            print("\033[93m" + msg + "\033[0m")
+            self._print("\033[93m" + msg + "\033[0m")
         else:
-            print(msg)
+            self._print(msg)
 
         if self.logger:
             self.logger.debug(msg)
@@ -41,34 +43,34 @@ class Logger():
         """ Enabled by default (parsed by foris) but treated like debug by sys
             logger
         """
-        print(msg)
+        self._print(msg)
 
         if self.logger:
             self.logger.debug(msg)
 
     def info(self, msg):
         if self.colored:
-            print("\033[91m" + msg + "\033[0m")
+            self._print("\033[91m" + msg + "\033[0m")
         else:
-            print(msg)
+            self._print(msg)
 
         if self.logger:
             self.logger.info(msg)
 
     def warning(self, msg):
         if self.colored:
-            print("\033[91m" + msg + "\033[0m")
+            self._print("\033[91m" + msg + "\033[0m")
         else:
-            print(msg)
+            self._print(msg)
 
         if self.logger:
             self.logger.warning(msg)
 
     def error(self, msg):
         if self.colored:
-            print("\033[41mERROR: " + msg + "\033[0m")
+            self._print("\033[41mERROR: " + msg + "\033[0m")
         else:
-            print("ERROR: {}".format(msg))
+            self._print("ERROR: {}".format(msg))
 
         if self.logger:
             self.logger.error(msg)
@@ -93,10 +95,14 @@ class Logger():
 
     def _print_debug(self, msg, detail):
         if self.colored:
-            print("\033[93m" + msg + "\033[0m")
+            self._print("\033[93m" + msg + "\033[0m")
         else:
+            self._print(msg)
+        self._print(detail)
+
+    def _print(self, msg):
+        if not self.quiet:
             print(msg)
-        print(detail)
 
 
 def get_logger(verbose):

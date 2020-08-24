@@ -67,5 +67,9 @@ def get_arg_parser():
         help="Run IPv6 measurement. This option takes precedence over "
              "'protocol_mode' defined in config file."
     )
+    parser.add_argument(
+        "-q", "--quiet", action="store_true", help="Produce no standard (normal "
+        "console) output"
+    )
 
     return parser
