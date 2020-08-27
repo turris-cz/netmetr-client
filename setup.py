@@ -37,7 +37,7 @@ setup(
     url='https://gitlab.labs.nic.cz/turris/netmetr-client',
     license='GPLv3+',
     description=DESCRIPTION,
-    long_description=open('README.rst').read(),
+    long_description=open('README.md').read(),
     install_requires=[
         'pyserial',
     ],

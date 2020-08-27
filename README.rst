@@ -1,4 +1,0 @@
-Netmetr-client
-==============
-
-TBD
