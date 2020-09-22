@@ -1,10 +1,13 @@
+import ipaddress
 import json
 import os
+import socket
 import tempfile
 import typing
 
 from .control import ControlServer
-from .exceptions import ControlServerError, MeasurementError
+from .exceptions import ControlServerError, MeasurementError, ConfigError
+from .exceptions import ProgrammingError
 from .logging import logger
 from .measurement import Measurement
 from .protocols import Protocol, Mode
@@ -133,12 +136,68 @@ class Netmetr:
         """
         return self._measure_protocol(Protocol.IPv6)
 
-    def _measure_protocol(self, proto: Protocol):
+    def measure_bind(self, bind_ip):
+        """Bind IP address and measure speed and other parameters of internet connection
+
+        Raise an exception whenever it is not possible to successfully finish the
+        measurement
+
+        On success, return a dictionary like this:
+         {
+             'download_mbps': 90.69,
+             'upload_mbps': 58.08,
+             'ping_ms': 4.2
+         }
+        """
+        return self._measure_protocol(bind_ip=bind_ip)
+
+    def _measure_protocol(self, proto: typing.Optional[Protocol] = None, bind_ip=None):
+        if bind_ip is not None:
+            if proto is not None:
+                raise ProgrammingError("Only one option of 'proto', 'bind_ip' "
+                                       "might be specified.")
+            ip_proto = get_proto_from_ip(bind_ip)
+            if ip_proto is None:
+                raise ConfigError(f"{bind_ip} is not a valid address")
+            check_addr_is_local(bind_ip, ip_proto)
+            proto = ip_proto
+
+        if proto is None:
+            raise ConfigError("Measurement protocol is not specified")
+
         logger.progress(f"Preparing for {proto.value} measurement...")
         with self.control_server.use_proto(proto):
             test_settings = self.control_server.request_settings()
 
-            measurement = Measurement(proto, test_settings)
+            measurement = Measurement(proto, test_settings, bind_ip=bind_ip)
             simple_result, full_results = measurement.measure()
             self.control_server.upload_result(*full_results)
             return simple_result
+
+
+def get_proto_from_ip(ip):
+    ip_proto = None
+    proto_callback_map = {
+        Protocol.IPv6: ipaddress.IPv6Address,
+        Protocol.IPv4: ipaddress.IPv4Address,
+    }
+    for proto, callback in proto_callback_map.items():
+        try:
+            callback(ip)
+            ip_proto = proto
+        except ipaddress.AddressValueError:
+            pass
+
+    return ip_proto
+
+
+def check_addr_is_local(ip, proto):
+    if proto == Protocol.IPv4:
+        sck = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    else:
+        sck = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    try:
+        sck.bind((ip, 0))
+    except OSError as exc:
+        raise ConfigError(f"Cant bind requested address (port {port}): ({exc})")
+    sck.close()

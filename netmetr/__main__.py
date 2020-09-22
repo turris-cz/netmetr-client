@@ -65,15 +65,22 @@ def main():
         config["uuid"] = netmetr.get_uuid()
 
     if not args.no_run:
-        protocol_mode = get_proto_mode(config["protocol_mode"])
-        if args.ipv4 and args.ipv6:
-            protocol_mode = Mode.both
-        elif args.ipv4 and not args.ipv6:
-            protocol_mode = Mode.only_4
-        elif not args.ipv4 and args.ipv6:
-            protocol_mode = Mode.only_6
+        if args.bind_address:
+            try:
+                netmetr.measure_bind(args.bind_address)
+            except NetmetrError as exc:
+                logger.error(f"Measurement failed: {exc}")
 
-        netmetr.measure(protocol_mode)
+        else:
+            protocol_mode = get_proto_mode(config["protocol_mode"])
+            if args.ipv4 and args.ipv6:
+                protocol_mode = Mode.both
+            elif args.ipv4 and not args.ipv6:
+                protocol_mode = Mode.only_4
+            elif not args.ipv4 and args.ipv6:
+                protocol_mode = Mode.only_6
+
+            netmetr.measure(protocol_mode)
 
     if args.dwlhist:
         netmetr.download_history(config["max_history_logs"])

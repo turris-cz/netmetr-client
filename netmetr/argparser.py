@@ -77,5 +77,13 @@ def get_arg_parser():
         "-q", "--quiet", action="store_true", help="Produce no standard (normal "
         "console) output"
     )
+    parser.add_argument(
+        "-b", "--bind-address", type=str,
+        default=None,
+        help="Bind this local address for the test. This option takes "
+             "precedence over '--ipv4' and '--ipv6' command line options and "
+             "'protocol_mode' option defined in config file and uses the bind "
+             "address protocol for the test."
+    )
 
     return parser

@@ -19,7 +19,7 @@ SPEED_RESULT_REQUIRED_FIELDS = {
 
 
 class Measurement:
-    def __init__(self, proto: Protocol, settings):
+    def __init__(self, proto: Protocol, settings, bind_ip=None):
         self.results = None
         self.proto = proto
         self.test_token = settings["test_token"]
@@ -27,6 +27,7 @@ class Measurement:
             proto,
             settings["test_numpings"],
             settings["test_server_address"],
+            bind_ip=bind_ip
         )
         self.speed = SpeedMeasurement(
             settings["test_token"],
@@ -35,6 +36,7 @@ class Measurement:
             settings["test_server_encryption"],
             settings["test_numthreads"],
             settings["test_duration"],
+            bind_ip=bind_ip
         )
 
         if os.path.isfile("/etc/turris-version"):
@@ -68,7 +70,7 @@ class Measurement:
         logger.info(
             "{} test result: download: {:.2f}Mbps, upload: "
             "{:.2f}Mbps, ping: {:.2f}ms".format(
-                self.proto,
+                self.proto.value,
                 speed_results["res_dl_throughput_kbps"] / 1000,
                 speed_results["res_ul_throughput_kbps"] / 1000,
                 ping_shortest / 1000000
@@ -113,26 +115,27 @@ class Measurement:
         result["pings"] = []
         return result
 
-
 class PingMeasurement:
-    def __init__(self, proto: Protocol, count, test_server_address):
-        self.shortest = None
+    def __init__(self, proto: Protocol, count, test_server_address, bind_ip=None):
         self.proto = proto
         self.count = count
         self.test_server_address = test_server_address
+        self.bind_ip = bind_ip
 
     def measure(self):
         """Run serie of pings to the test server and computes & saves
          the lowest one
         """
         ping_cmd = "ping" if self.proto == Protocol.IPv4 else "ping6"
+        command = ping_cmd
+        if self.bind_ip:
+            command = command + " -I " + self.bind_ip
+        command = command + " -c1 " + self.test_server_address
         logger.progress("Starting ping test...")
+        logger.debug(f"Using ping command: {command}")
         ping_values = list()
         for i in range(1, int(self.count)+1):
-            process = subprocess.Popen([
-                ping_cmd, "-c1",
-                self.test_server_address
-            ], stdout=subprocess.PIPE)
+            process = subprocess.Popen(shlex.split(command), stdout=subprocess.PIPE)
             if (process.wait() == 0):
                 try:
                     ping_result = process.stdout.read()
@@ -152,7 +155,8 @@ class PingMeasurement:
 
 
 class SpeedMeasurement:
-    def __init__(self, token, address, port, encryption, numthreads, duration):
+    def __init__(self, token, address, port, encryption, numthreads, duration,
+                 bind_ip=None):
         self.results = None
         self.token = token
         self.address = address
@@ -160,6 +164,7 @@ class SpeedMeasurement:
         self.encryption = encryption
         self.numthreads = numthreads
         self.duration = duration
+        self.bind_ip = bind_ip
         # Create config file needed by rmbt-client
         _, self.config_file = tempfile.mkstemp()
         _, self.flows_file = tempfile.mkstemp()
@@ -174,17 +179,20 @@ class SpeedMeasurement:
             raise MeasurementError("Error writing measurement config file ({})".format(e))
 
         encryption = {True: " -e "}
-        self.rmbt_command = shlex.split(
+        command = (
             RMBT_BIN +
             encryption.get(self.encryption, "") +
             " -h " + self.address +
+            " -c " + self.config_file +
             " -p " + str(self.port) +
             " -t " + self.token +
             " -f " + self.numthreads +
             " -d " + self.duration +
-            " -u " + self.duration +
-            " -c " + self.config_file
+            " -u " + self.duration
         )
+        if self.bind_ip:
+            command = command + " -b " + self.bind_ip
+        self.rmbt_command = shlex.split(command)
 
     def measure(self):
         """Start RMBT client with saved arguments to measure the speed
