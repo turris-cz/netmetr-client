@@ -1,0 +1,30 @@
+stages:
+    - build_rmbt
+    - test
+
+
+build_rmbt:
+  stage: build_rmbt
+  image: gcc
+  script:
+    - apt-get update
+    - apt-get install -y libjson-c-dev
+    - git clone https://github.com/lwimmer/rmbt-client
+    - cd rmbt-client && ./autobuild.sh && cd ..
+    - mv rmbt-client/src/rmbt rmbt
+  artifacts:
+    paths:
+      - rmbt
+
+simple_test:
+  dependencies:
+    - build_rmbt
+  image: python:3-slim
+  stage: test
+  script:
+    - apt-get update
+    - apt-get install -y iputils-ping libjson-c-dev xz-utils
+    - cp $(find / -name "rmbt") /bin/rmbt
+
+    - python -m netmetr --help
+    - python -m netmetr --debug --control-server netmetr-control.labs.nic.cz --no-run 2>&1 | tee log.out && echo -e "\nExtracted errors:" && if grep "ERROR" log.out; then exit 1; else exit 0; fi
