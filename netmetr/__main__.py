@@ -10,23 +10,13 @@ from .protocols import Mode, get_proto_mode
 from .config import make_default_config
 
 
-def time_to_run(config):
-    if not config["autostart_enabled"]:
+def is_time_to_run(hours_to_run):
+    if not hours_to_run:
         return False
 
-    if not config["hours_to_run"]:
-        return False
+    hours = tuple(map(int, hours_to_run))
+    return datetime.datetime.now().hour in hours
 
-    hours = tuple(map(int, config["hours_to_run"]))
-    if datetime.datetime.now().hour not in hours:
-        return False
-
-    logger.debug("Autostarted, sleeping {} seconds before run.".format(
-        config["autostart_delay"]
-    ))
-    time.sleep(config["autostart_delay"])
-
-    return True
 
 def main():
     parser = get_arg_parser()
@@ -46,12 +36,13 @@ def main():
     # So whenever the script is autostarted, it looks to it's config and if
     # it finds the current hour of day in it, it will start the test
 
-    if args.autostart and not time_to_run(config):
-        logger.info(
-            "Netmetr autostarted but autostart disabled or not right time to "
-            "run, exiting."
-        )
-        return
+    if args.autostart:
+        if not config["autostart_enabled"] or not is_time_to_run(config["hours_to_run"]):
+            logger.info("Autostarted but autostart disabled or not time to run, exiting.")
+            return
+
+        logger.debug(f"Autostarted, sleeping {config['autostart_delay']}s before run.")
+        time.sleep(config["autostart_delay"])
 
     netmetr = Netmetr(
         args.control_server or config["control_server"],
