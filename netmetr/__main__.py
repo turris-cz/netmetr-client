@@ -54,9 +54,9 @@ def main():
         return
 
     netmetr = Netmetr(
-        config["control_server"],
+        args.control_server or config["control_server"],
         unsecure=args.unsecure_connection,
-        config["uuid"]
+        uuid=args.uuid or config["uuid"]
     )
 
     config_identity_used = args.uuid is None and args.control_server is None

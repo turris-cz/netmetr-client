@@ -39,10 +39,16 @@ def get_arg_parser():
         " code or (with --dwlhist) to download measurement history"
     )
     parser.add_argument(
-        "--fallback-control-server-url", type=str, nargs=1,
-        default=["control.netmetr.cz"],
-        help="Set fallback control server to run test against in case it is "
-             "not configured in UCI"
+        "--control-server", type=str,
+        default=None,
+        help="Set control server to run test against. This option takes "
+             "precedence over 'control_server' defined in config file."
+    )
+    parser.add_argument(
+        "--uuid", type=str,
+        default=None,
+        help="Set uuid used for the test. This option takes "
+             "precedence over 'uuid' defined in config file."
     )
     parser.add_argument(
         "--unsecure-connection", action="store_true",
