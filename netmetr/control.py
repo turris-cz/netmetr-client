@@ -1,4 +1,5 @@
 import calendar
+import contextlib
 import json
 import locale
 import ssl
@@ -17,8 +18,8 @@ DEFAULT_LANG = "en_US"
 
 
 class ControlServer:
-    def __init__(self, address, uuid=None, use_tls=True):
-        self.address = address
+    def __init__(self, url, uuid=None, use_tls=True):
+        self.address = url
         self.uuid = uuid
         self.use_tls = use_tls
 
@@ -49,9 +50,12 @@ class ControlServer:
         logger.log_request(req, url)
         rep = self.send_request(req, url)
         logger.log_response(rep)
-        uuid_new = rep["settings"][0].get("uuid")
-        if uuid_new:
-            self.uuid = uuid_new
+        new_uuid = rep["settings"][0].get("uuid")
+        if new_uuid:
+            self.uuid = new_uuid
+        if not self.uuid:
+            raise ControlServerError("UUID not contained in control server response")
+
 
     def request_settings(self):
         logger.progress("Requesting test config from the control server...")
@@ -126,9 +130,6 @@ class ControlServer:
         rep = self.send_request(req, url)
         logger.log_response(rep)
 
-        if rep["error"]:
-            raise ControlServerError("Failed to download the sync code")
-
         sync_code = rep["sync"][0].get("sync_code")
         if sync_code:
             return sync_code
@@ -161,7 +162,13 @@ class ControlServer:
                 "server address - please check it and try again later."
             ) from e
 
-        return json.loads(resp.read().decode("utf-8"))
+        rep = json.loads(resp.read().decode("utf-8"))
+        if rep.get("error"):
+            raise ControlServerError("Control server response contains error: {}".format(
+                rep["error"]
+            ))
+
+        return rep
 
     def create_url(self, path, query_params={}):
         url = "{}://{}/RMBTControlServer/{}".format(

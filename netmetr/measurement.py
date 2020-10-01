@@ -19,13 +19,20 @@ SPEED_RESULT_REQUIRED_FIELDS = {
 
 class Measurement:
     def __init__(self, settings):
-        self.test_server_address = settings["test_server_address"]
-        self.test_server_port = settings["test_server_port"]
+        self.results = None
         self.test_token = settings["test_token"]
-        self.test_numthreads = settings["test_numthreads"]
-        self.test_numpings = settings["test_numpings"]
-        self.test_server_encryption = settings["test_server_encryption"]
-        self.test_duration = settings["test_duration"]
+        self.pings = PingMeasurement(
+            settings["test_numpings"],
+            settings["test_server_address"],
+        )
+        self.speed = SpeedMeasurement(
+            settings["test_token"],
+            settings["test_server_address"],
+            settings["test_server_port"],
+            settings["test_server_encryption"],
+            settings["test_numthreads"],
+            settings["test_duration"],
+        )
 
         if os.path.isfile("/etc/turris-version"):
             with open("/etc/turris-version", "r") as turris_version:
@@ -46,33 +53,79 @@ class Measurement:
             self.hw_version = "unknown"
 
     def measure(self):
-        ping_shortest = self.measure_pings()
-        speed_results = self.measure_speed()
+        ping_shortest = self.pings.measure()
+        speed_results = self.speed.measure()
+
+        simple_result = {
+            "download_mbps": round(speed_results["res_dl_throughput_kbps"] / 1000, 2),
+            "upload_mbps": round(speed_results["res_ul_throughput_kbps"] / 1000, 2),
+            "ping_ms": round(ping_shortest / 1000000, 2),
+        }
+
         logger.info(
-            "Download speed: {:.2f}Mbps, upload speed: {:.2f}Mbps, shortest "
-            "ping: {:.2f}ms".format(
-                speed_results.get("res_dl_throughput_kbps") / 1000,
-                speed_results.get("res_ul_throughput_kbps") / 1000,
+            "Test result: download: {:.2f}Mbps, upload: "
+            "{:.2f}Mbps, ping: {:.2f}ms".format(
+                speed_results["res_dl_throughput_kbps"] / 1000,
+                speed_results["res_ul_throughput_kbps"] / 1000,
                 ping_shortest / 1000000
             )
         )
-        if speed_results:
-            speed_flows = self.import_speed_flows() if speed_results else None
-        return (
-            self.generate_test_result(ping_shortest, speed_results),
-            speed_flows,
-        )
 
-    def measure_pings(self) -> typing.Optional[int]:
+        full_results = (
+            self.generate_test_result(ping_shortest, speed_results),
+            self.speed.import_speed_flows()
+        )
+        return simple_result, full_results
+
+    def generate_test_result(self, ping_shortest: int, test_res):
+        """Uploads test result to the control server.
+
+        :param ping_shortest: Minimal latency in nanoseconds
+        :param test_res: JSON with the test result (obtained from RMBT binary)
+        """
+
+        # See https://control.netmetr.cz/RMBTControlServer/api/v1/openapi#/default/post_result
+        # for schema definition types from there are written as a comments
+        # bellow
+        result = {
+            "geoLocations": [],
+            "model": self.model,  # str
+            "network_type": get_network_type(),  # int
+            "product": "os: "+self.os_version+" hw: "+self.hw_version,  # str
+            "test_bytes_download": test_res.get("res_total_bytes_dl"),  # int
+            "test_bytes_upload": test_res.get("res_total_bytes_ul"),  # int
+            "test_nsec_download": test_res.get("res_dl_time_ns"),  # int
+            "test_nsec_upload": test_res.get("res_ul_time_ns"),  # int
+            "test_num_threads": test_res.get("res_dl_num_flows"),  # int
+            "test_ping_shortest": ping_shortest,  # int
+            "num_threads_ul": test_res.get("res_ul_num_flows"),  # int
+            "test_speed_download": test_res.get("res_dl_throughput_kbps"),  # int
+            "test_speed_upload": test_res.get(
+                "res_ul_throughput_kbps"
+            ),  # int
+            "test_token": self.test_token,  # str
+        }
+
+        result["pings"] = []
+        return result
+
+
+class PingMeasurement:
+    def __init__(self, count, test_server_address):
+        self.shortest = None
+        self.count = count
+        self.test_server_address = test_server_address
+
+    def measure(self):
         """Run serie of pings to the test server and computes & saves
          the lowest one
         """
-
+        ping_cmd = "ping"
         logger.progress("Starting ping test...")
         ping_values = list()
-        for i in range(1, int(self.test_numpings)+1):
+        for i in range(1, int(self.count)+1):
             process = subprocess.Popen([
-                "ping", "-c1",
+                ping_cmd, "-c1",
                 self.test_server_address
             ], stdout=subprocess.PIPE)
             if (process.wait() == 0):
@@ -85,18 +138,23 @@ class Measurement:
                     ping = int(ping * 1000000)
                     ping_values.append(ping)
                 except Exception as e:
-                    logger.error("Problem decoding pings: {}".format(e))
-                    return None
+                    raise MeasurementError("Problem decoding pings: {}".format(e))
                 time.sleep(0.5)
         try:
             return min(int(s) for s in ping_values)
         except Exception as e:
-            logger.error("Problem getting lowest ping: {}".format(e))
-            return None
+            raise MeasurementError("Problem getting lowest ping: {}".format(e))
 
-    def measure_speed(self):
-        """Start RMBT client with saved arguments to measure the speed
-        """
+
+class SpeedMeasurement:
+    def __init__(self, token, address, port, encryption, numthreads, duration):
+        self.results = None
+        self.token = token
+        self.address = address
+        self.port = port
+        self.encryption = encryption
+        self.numthreads = numthreads
+        self.duration = duration
         # Create config file needed by rmbt-client
         _, self.config_file = tempfile.mkstemp()
         _, self.flows_file = tempfile.mkstemp()
@@ -106,29 +164,34 @@ class Measurement:
                         '{"cnf_file_flows": "'+self.flows_file+'.xz"}'
                 )
         except OSError as e:
-            raise MeasurementError("Error creating measurement config file".format(e))
+            raise MeasurementError("Error creating measurement config file ({})".format(e))
         except IOError as e:
-            raise MeasurementError("Error writing measurement config file".format(e))
+            raise MeasurementError("Error writing measurement config file ({})".format(e))
 
         encryption = {True: " -e "}
-        logger.progress("Starting speed test...")
-        rmbt_command = shlex.split(
+        self.rmbt_command = shlex.split(
             RMBT_BIN +
-            encryption.get(self.test_server_encryption, "") +
-            " -h " + self.test_server_address +
-            " -p " + str(self.test_server_port) +
-            " -t " + self.test_token +
-            " -f " + self.test_numthreads +
-            " -d " + self.test_duration +
-            " -u " + self.test_duration +
+            encryption.get(self.encryption, "") +
+            " -h " + self.address +
+            " -p " + str(self.port) +
+            " -t " + self.token +
+            " -f " + self.numthreads +
+            " -d " + self.duration +
+            " -u " + self.duration +
             " -c " + self.config_file
         )
+
+    def measure(self):
+        """Start RMBT client with saved arguments to measure the speed
+        """
+        logger.progress("Starting speed test...")
         try:
             process = subprocess.Popen(
-                rmbt_command,
+                self.rmbt_command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
             )
+
         except OSError as e:
             raise MeasurementError("Speed measurement failed: {}".format(e))
 
@@ -136,10 +199,26 @@ class Measurement:
             line = process.stderr.readline()
             if line:
                 logger.output(line.decode("utf-8").strip())
-        test_result = process.stdout.read().decode("utf-8")
+
+        try:
+            test_result = process.stdout.read().decode("utf-8")
+
+        except UnicodeError as e:
+            raise MeasurementError(
+                "Speed measurement failed: Problem in decoding measurement "
+                "output: {}".format(e)
+            ) from e
 
         logger.debug("Speed test result:", test_result)
-        test_result_json = json.loads(test_result.split("}")[1] + "}")
+
+        try:
+            test_result_json = json.loads(test_result.split("}")[1] + "}")
+
+        except json.JSONDecodeError as e:
+            raise MeasurementError(
+                "Speed measurement failed: Problem in decoding measurement "
+                "output: {}".format(e)
+            ) from e
 
         for field in SPEED_RESULT_REQUIRED_FIELDS:
             if field not in test_result_json:
@@ -197,35 +276,3 @@ class Measurement:
         except OSError as e:
             logger.error("Failed to remove mesurement config file: {}".format(e))
         return speed_array
-
-    def generate_test_result(self, ping_shortest: int, test_res):
-        """Uploads test result to the control server.
-
-        :param ping_shortest: Minimal latency in nanoseconds
-        :param test_res: JSON with the test result (obtained from RMBT binary)
-        """
-
-        # See https://control.netmetr.cz/RMBTControlServer/api/v1/openapi#/default/post_result
-        # for schema definition types from there are written as a comments
-        # bellow
-        result = {
-            "geoLocations": [],
-            "model": self.model,  # str
-            "network_type": get_network_type(),  # int
-            "product": "os: "+self.os_version+" hw: "+self.hw_version,  # str
-            "test_bytes_download": test_res.get("res_total_bytes_dl"),  # int
-            "test_bytes_upload": test_res.get("res_total_bytes_ul"),  # int
-            "test_nsec_download": test_res.get("res_dl_time_ns"),  # int
-            "test_nsec_upload": test_res.get("res_ul_time_ns"),  # int
-            "test_num_threads": test_res.get("res_dl_num_flows"),  # int
-            "test_ping_shortest": ping_shortest,  # int
-            "num_threads_ul": test_res.get("res_ul_num_flows"),  # int
-            "test_speed_download": test_res.get("res_dl_throughput_kbps"),  # int
-            "test_speed_upload": test_res.get(
-                "res_ul_throughput_kbps"
-            ),  # int
-            "test_token": self.test_token,  # str
-        }
-
-        result["pings"] = []
-        return result

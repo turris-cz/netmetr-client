@@ -74,10 +74,11 @@ class Logger():
             self.logger.error(msg)
 
     def log_request(self, req, url, msg=""):
-        self._print_debug(
-            "Sending the following request to {}\n{}".format(url, msg),
-            detail=json.dumps(req, indent=2)
-        )
+        if self.lvl_debug:
+            self._print_debug(
+                "Sending the following request to {}\n{}".format(url, msg),
+                detail=json.dumps(req, indent=2)
+            )
         if self.logger:
             self.logger.debug(
                 "Sending the following request to %s %s: %s", url, msg,
@@ -85,7 +86,8 @@ class Logger():
             )
 
     def log_response(self, resp):
-        self._print_debug("response:", detail=json.dumps(resp, indent=2))
+        if self.lvl_debug:
+            self._print_debug("response:", detail=json.dumps(resp, indent=2))
         if self.logger:
             self.logger.debug("Response: %s", json.dumps(resp))
 

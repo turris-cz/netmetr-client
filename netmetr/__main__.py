@@ -1,36 +1,12 @@
-import json
-import os
 import datetime
-import random
-import tempfile
 import time
 
 from . import __version__
 from .argparser import get_arg_parser
-from .control import ControlServer
-from .exceptions import ControlServerError, MeasurementError
+from .exceptions import NetmetrError
 from .logging import logger
-from .measurement import Measurement
-
-try:
-    from .config import Config
-except ImportError as e:
-    if str(e) == "No module named 'euci'":
-        Config = dict
-    else:
-        raise e
-
-
-HIST_FILE = "/tmp/netmetr-history.json"
-DEFAULT_CONFIG = {
-    "autostart_enabled": False,
-    "autostart_delay": random.randint(0, 3600),
-    "control_server": None,  # default one obtained using argparser
-    "max_history_logs": 10,
-    "uuid": None,
-    "hours_to_run": (random.randint(0, 23),),
-    "sync_code": None,
-}
+from .netmetr import Netmetr
+from .config import make_default_config
 
 
 def time_to_run(config):
@@ -51,74 +27,55 @@ def time_to_run(config):
 
     return True
 
-
-def save_history(history):
-    _, hist_file = tempfile.mkstemp()
-    try:
-        with open(hist_file, "w") as f:
-                f.write(json.dumps(history, indent=2))
-        os.rename(hist_file, HIST_FILE)
-    except OSError as e:
-        logger.error("Error saving measurement history: {}".format(e))
-
-
 def main():
+    parser = get_arg_parser()
+    args = parser.parse_args()
+
+    logger.set(args.debug, not args.no_color, args.syslog)
+    logger.info("Netmetr Python client v{} starting...".format(__version__))
+
+    config = make_default_config()
+
+    if args.only_config:
+        return
+
     # When autostarted - check whether autostart is enabled and
     # if it is right time to run the test.
     # We expect hours when the test should be run in uci config.
     # So whenever the script is autostarted, it looks to it's config and if
     # it finds the current hour of day in it, it will start the test
 
-    parser = get_arg_parser()
-    args = parser.parse_args()
-
-    logger.set(args.debug, not args.no_color, args.syslog)
-    logger.info("Netmetr Python client v{} starting...".format(__version__))
-    DEFAULT_CONFIG["control_server"] = args.fallback_control_server_url[0]
-
-    config = Config(DEFAULT_CONFIG)
-
-    if args.only_config:
-        return
-
     if args.autostart and not time_to_run(config):
         logger.info(
-            "Autostarted but autostart disabled or not right time to run, exiting."
+            "Netmetr autostarted but autostart disabled or not right time to "
+            "run, exiting."
         )
         return
 
-    control_server = ControlServer(
+    netmetr = Netmetr(
         config["control_server"],
-        uuid=config["uuid"],
-        use_tls=not args.unsecure_connection
+        unsecure=args.unsecure_connection,
+        config["uuid"]
     )
 
-    if control_server.uuid != config["uuid"]:
-        config["uuid"] = control_server.uuid
+    config_identity_used = args.uuid is None and args.control_server is None
+    if (config_identity_used and config["uuid"] != netmetr.get_uuid()):
         del config["sync_code"]
+        config["uuid"] = netmetr.get_uuid()
 
     if not args.no_run:
-        try:
-            test_settings = control_server.request_settings()
-            measurement = Measurement(test_settings)
-            test_results = measurement.measure()
-            control_server.upload_result(*test_results)
-        except MeasurementError as e:
-            logger.error("Measurement failed: {}".format(e))
+        netmetr.measure()
 
     if args.dwlhist:
-        try:
-            history = control_server.download_history(config["max_history_logs"])
-            save_history(history)
-        except ControlServerError as e:
-            logger.error("Failed to download measurement history: {}".format(e))
+        netmetr.download_history(config["max_history_logs"])
 
     try:
-        sync_code = control_server.download_sync_code()
-        config["sync_code"] = sync_code
-        logger.info("Your Sync code is: " + sync_code)
-    except ControlServerError as e:
-        logger.error("Failed to download sync code: {}".format(e))
+        sync_code = netmetr.download_sync_code()
+        if config_identity_used:
+            config["sync_code"] = sync_code
+        logger.info(f"Your Sync code is: {sync_code}")
+    except NetmetrError as exc:
+        logger.error(f"Failed to download sync code: {exc}")
 
 
 if __name__ == "__main__":
