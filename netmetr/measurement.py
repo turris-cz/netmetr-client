@@ -115,6 +115,7 @@ class Measurement:
         result["pings"] = []
         return result
 
+
 class PingMeasurement:
     def __init__(self, proto: Protocol, count, test_server_address, bind_ip=None):
         self.proto = proto
@@ -222,7 +223,7 @@ class SpeedMeasurement:
                 "output: {}".format(e)
             ) from e
 
-        logger.debug("Speed test result:", test_result)
+        logger.log_result(test_result)
 
         try:
             test_result_json = json.loads(test_result.split("}")[1] + "}")

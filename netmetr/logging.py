@@ -93,6 +93,10 @@ class Logger():
         if self.logger:
             self.logger.debug("Response: %s", json.dumps(resp))
 
+    def log_result(self, result):
+        if self.lvl_debug:
+            self._print_debug("Speed test result:", detail=result)
+
     def _print_debug(self, msg, detail):
         if self.colored:
             self._print("\033[93m" + msg + "\033[0m")
