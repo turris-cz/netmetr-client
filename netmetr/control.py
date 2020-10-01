@@ -12,6 +12,7 @@ import urllib.parse
 from . import __version__
 from .exceptions import ControlServerError
 from .logging import logger
+from .protocols import Protocol
 
 CLIENT_SW_VERSION = "Python netmetr client v{}".format(__version__)
 DEFAULT_LANG = "en_US"
@@ -19,7 +20,10 @@ DEFAULT_LANG = "en_US"
 
 class ControlServer:
     def __init__(self, url, uuid=None, use_tls=True):
-        self.address = url
+        self.url_dual = url
+        self.url_ipv4 = None
+        self.url_ipv6 = None
+        self.address = self.url_dual
         self.uuid = uuid
         self.use_tls = use_tls
 
@@ -55,7 +59,19 @@ class ControlServer:
             self.uuid = new_uuid
         if not self.uuid:
             raise ControlServerError("UUID not contained in control server response")
+        self.url_ipv4 = rep["settings"][0]["urls"].get("control_ipv4_only")
+        self.url_ipv6 = rep["settings"][0]["urls"].get("control_ipv6_only")
 
+    @contextlib.contextmanager
+    def use_proto(self, proto):
+        try:
+            if proto == Protocol.IPv4:
+                self.address = self.url_ipv4
+            else:
+                self.address = self.url_ipv6
+            yield
+        finally:
+            self.address = self.url_dual
 
     def request_settings(self):
         logger.progress("Requesting test config from the control server...")

@@ -6,6 +6,7 @@ from .argparser import get_arg_parser
 from .exceptions import NetmetrError
 from .logging import logger
 from .netmetr import Netmetr
+from .protocols import Mode, get_proto_mode
 from .config import make_default_config
 
 
@@ -64,7 +65,8 @@ def main():
         config["uuid"] = netmetr.get_uuid()
 
     if not args.no_run:
-        netmetr.measure()
+        protocol_mode = get_proto_mode(config["protocol_mode"])
+        netmetr.measure(protocol_mode)
 
     if args.dwlhist:
         netmetr.download_history(config["max_history_logs"])

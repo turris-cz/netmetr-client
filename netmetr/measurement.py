@@ -9,6 +9,7 @@ import typing
 from .exceptions import MeasurementError
 from .logging import logger
 from .network import get_network_type
+from .protocols import Protocol
 
 RMBT_BIN = "rmbt"
 SPEED_RESULT_REQUIRED_FIELDS = {
@@ -18,10 +19,12 @@ SPEED_RESULT_REQUIRED_FIELDS = {
 
 
 class Measurement:
-    def __init__(self, settings):
+    def __init__(self, proto: Protocol, settings):
         self.results = None
+        self.proto = proto
         self.test_token = settings["test_token"]
         self.pings = PingMeasurement(
+            proto,
             settings["test_numpings"],
             settings["test_server_address"],
         )
@@ -63,8 +66,9 @@ class Measurement:
         }
 
         logger.info(
-            "Test result: download: {:.2f}Mbps, upload: "
+            "{} test result: download: {:.2f}Mbps, upload: "
             "{:.2f}Mbps, ping: {:.2f}ms".format(
+                self.proto,
                 speed_results["res_dl_throughput_kbps"] / 1000,
                 speed_results["res_ul_throughput_kbps"] / 1000,
                 ping_shortest / 1000000
@@ -111,8 +115,9 @@ class Measurement:
 
 
 class PingMeasurement:
-    def __init__(self, count, test_server_address):
+    def __init__(self, proto: Protocol, count, test_server_address):
         self.shortest = None
+        self.proto = proto
         self.count = count
         self.test_server_address = test_server_address
 
@@ -120,7 +125,7 @@ class PingMeasurement:
         """Run serie of pings to the test server and computes & saves
          the lowest one
         """
-        ping_cmd = "ping"
+        ping_cmd = "ping" if self.proto == Protocol.IPv4 else "ping6"
         logger.progress("Starting ping test...")
         ping_values = list()
         for i in range(1, int(self.count)+1):

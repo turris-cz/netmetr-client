@@ -8,7 +8,7 @@ CONFIG = "netmetr"
 SETTINGS_SECTION = "settings"
 UCI_MANDATORY_OPTIONS = {
     "autostart_enabled", "hours_to_run", "autostart_delay",
-    "max_history_logs", "control_server"
+    "max_history_logs", "control_server", "protocol_mode"
 }
 
 
