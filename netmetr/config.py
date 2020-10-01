@@ -1,11 +1,10 @@
 import random
 
-
 try:
     from .uci_config import Config
 except ImportError as e:
     if str(e) == "No module named 'euci'":
-        Config = dict
+        Config = dict  # type: ignore
     else:
         raise e
 

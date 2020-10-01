@@ -13,5 +13,6 @@ class MeasurementError(NetmetrError):
 class ConfigError(NetmetrError):
     pass
 
+
 class ProgrammingError(NetmetrError):
     pass

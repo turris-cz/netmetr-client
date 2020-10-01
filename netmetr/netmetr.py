@@ -47,6 +47,23 @@ class Netmetr:
     def download_sync_code(self):
         return self.control_server.download_sync_code()
 
+    def _run_measurement(self, protocol: Protocol) -> typing.Tuple[bool, typing.Dict]:
+        """
+        Internal helper function for the public measure() method.
+
+        Runs a measurement with the specified protocol. Returns True if measured successfully.
+        The second return value is always a dict that can be used as part of the overall return
+        value for the measure() method.
+        """
+        try:
+            return True, self._measure_protocol(protocol)
+        except ControlServerError as exc:
+            logger.error(f"{protocol.value} not available for measurement ({exc})")
+            return False, {"error": "Not available"}
+        except MeasurementError as exc:
+            logger.error(f"{protocol.value} measurement failed: {exc}")
+            return False, {"error": "Failed"}
+
     def measure(self, protocol_mode: Mode = Mode.prefer_6):
         """Measure speed and other parameters of internet connection
 
@@ -76,33 +93,19 @@ class Netmetr:
             Protocol.IPv4: [Mode.only_4, Mode.both, Mode.prefer_4],
             Protocol.IPv6: [Mode.only_6, Mode.both, Mode.prefer_6]
         }
+
+        # try to run the measurements
         for proto, protocol_modes in proto_map.items():
             if protocol_mode in protocol_modes:
-                try:
-                    result[proto] = self._measure_protocol(proto)
-                    measured = True
-                except ControlServerError as exc:
-                    logger.error(f"{proto.value} not available for measurement ({exc})")
-                    result[proto] = {"error": "Not available"}
-                except MeasurementError as exc:
-                    logger.error(f"{proto.value} measurement failed: {exc}")
-                    result[proto] = {"error": "Failed"}
+                m, result[proto] = self._run_measurement(proto)
+                measured = m or measured
 
+        # if all of them failed, try running the unpreferred option
         if not measured:
-            proto = None
             if protocol_mode == Mode.prefer_4:
-                proto = Protocol.IPv6
-            if protocol_mode == Mode.prefer_6:
-                proto = Protocol.IPv4
-            if proto is not None:
-                try:
-                    result[proto] = self._measure_protocol(proto)
-                except ControlServerError as exc:
-                    logger.error(f"{proto.value} not available for measurement ({exc})")
-                    result[proto] = {"error": "Not available"}
-                except MeasurementError as exc:
-                    logger.error(f"{proto.value} measurement failed: {exc}")
-                    result[proto] = {"error": "Failed"}
+                _, result[Protocol.IPv6] = self._run_measurement(Protocol.IPv6)
+            elif protocol_mode == Mode.prefer_6:
+                _, result[Protocol.IPv4] = self._run_measurement(Protocol.IPv4)
 
         return result
 
@@ -199,5 +202,5 @@ def check_addr_is_local(ip, proto):
     try:
         sck.bind((ip, 0))
     except OSError as exc:
-        raise ConfigError(f"Cant bind requested address (port {port}): ({exc})")
+        raise ConfigError(f"Cant bind requested address: ({exc})")
     sck.close()

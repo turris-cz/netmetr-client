@@ -1,4 +1,4 @@
-import euci
+import euci  # type: ignore
 
 from .exceptions import ConfigError
 from .logging import logger

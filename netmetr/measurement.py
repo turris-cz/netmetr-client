@@ -4,7 +4,6 @@ import shlex
 import subprocess
 import tempfile
 import time
-import typing
 
 from .exceptions import MeasurementError
 from .logging import logger
