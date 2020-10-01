@@ -57,5 +57,15 @@ def get_arg_parser():
         "--syslog", action="store_true",
         help="Enable log to syslog"
     )
+    parser.add_argument(
+        "-4", "--ipv4", action="store_true",
+        help="Run IPv4 measurement. This option takes precedence over "
+             "'protocol_mode' defined in config file."
+    )
+    parser.add_argument(
+        "-6", "--ipv6", action="store_true",
+        help="Run IPv6 measurement. This option takes precedence over "
+             "'protocol_mode' defined in config file."
+    )
 
     return parser

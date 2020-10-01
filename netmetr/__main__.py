@@ -66,6 +66,13 @@ def main():
 
     if not args.no_run:
         protocol_mode = get_proto_mode(config["protocol_mode"])
+        if args.ipv4 and args.ipv6:
+            protocol_mode = Mode.both
+        elif args.ipv4 and not args.ipv6:
+            protocol_mode = Mode.only_4
+        elif not args.ipv4 and args.ipv6:
+            protocol_mode = Mode.only_6
+
         netmetr.measure(protocol_mode)
 
     if args.dwlhist:
