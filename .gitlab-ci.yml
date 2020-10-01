@@ -36,5 +36,7 @@ linters:
   # the reason for archlinux is, that the packages are up-to date
   image: archlinux
   script:
-    - pacman --noconfirm -Sy mypy
+    - pacman --noconfirm -Sy mypy bandit flake8
     - mypy netmetr/
+    - bandit netmetr/
+    - flake8 --max-line-length 120 netmetr/
