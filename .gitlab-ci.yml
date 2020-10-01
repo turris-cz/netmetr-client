@@ -1,6 +1,7 @@
 stages:
     - build_rmbt
     - test
+    - linters
 
 
 build_rmbt:
@@ -28,3 +29,12 @@ simple_test:
 
     - python -m netmetr --help
     - python -m netmetr --debug --control-server netmetr-control.labs.nic.cz --no-run 2>&1 | tee log.out && echo -e "\nExtracted errors:" && if grep "ERROR" log.out; then exit 1; else exit 0; fi
+
+
+linters:
+  stage: linters
+  # the reason for archlinux is, that the packages are up-to date
+  image: archlinux
+  script:
+    - pacman --noconfirm -Sy mypy
+    - mypy netmetr/
