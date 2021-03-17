@@ -42,7 +42,7 @@ def main():
             return
 
         logger.debug(f"Autostarted, sleeping {config['autostart_delay']}s before run.")
-        time.sleep(config["autostart_delay"])
+        time.sleep(int(config["autostart_delay"]))
 
     netmetr = Netmetr(
         args.control_server or config["control_server"],
