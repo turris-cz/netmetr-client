@@ -15,9 +15,12 @@ def get_arg_parser():
     )
 
     parser.add_argument(
-        "--autostart", action="store_true", help="use this"
+        "--autostart", action="store_true", help="Use this"
         " option only when running as an automated service - to check whether"
-        " it is right time to run the test"
+        " it is right time to run the test. This option also ensures that the"
+        " test is postponed until randomized time offset is met which is needed"
+        " for uniform distribution of the measurements and most accurate"
+        " results."
     )
     parser.add_argument(
         "--dwlhist",
