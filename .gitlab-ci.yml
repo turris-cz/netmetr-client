@@ -33,6 +33,7 @@ simple_test:
 
 linters:
   stage: linters
+  allow_failure: true
   # the reason for archlinux is, that the packages are up-to date
   image: archlinux
   script:
