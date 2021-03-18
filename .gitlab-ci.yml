@@ -1,11 +1,10 @@
 stages:
-    - build_rmbt
-    - test
-    - linters
+  - pre
+  - test
 
 
 build_rmbt:
-  stage: build_rmbt
+  stage: pre
   image: gcc
   script:
     - apt-get update
@@ -32,12 +31,12 @@ simple_test:
 
 
 linters:
-  stage: linters
-  allow_failure: true
-  # the reason for archlinux is, that the packages are up-to date
-  image: archlinux
+  stage: test
+  # originally archlinux, that somehow broke. Debian testing should be pretty recent as well.
+  image: debian:testing
+  before_script:
+    - apt-get update && apt-get install --no-install-recommends --no-install-suggests -y python3 mypy bandit flake8 && apt-get clean -y && rm -rf /var/lib/apt/lists/*
   script:
-    - pacman --noconfirm -Sy mypy bandit flake8
     - mypy netmetr/
-    - bandit netmetr/
+    - bandit -r netmetr/
     - flake8 --max-line-length 120 netmetr/
